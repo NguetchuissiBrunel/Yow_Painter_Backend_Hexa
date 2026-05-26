@@ -1,0 +1,78 @@
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: yowpainter-api
+
+  datasource:
+    # Connexion à la base de données sur Render.com
+    # Pour le dev local, si l'hôte interne ne marche pas, tu devras utiliser l'External Database URL
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:dpg-d83kv9egvqtc73f3nlq0-a}:${DB_PORT:5432}/${DB_NAME:yowbackend}}
+    username: ${DB_USER:yowbackend_user}
+    password: ${DB_PASS:VNtMmiYQqBU18MrItVoJ1AU7fSCQX2vc}
+    driver-class-name: org.postgresql.Driver
+    # Propriete importante pour que Hibernate recupere correctement le metadata multi-schema
+    hikari:
+      maximum-pool-size: 20
+      schema: public
+
+  jpa:
+    hibernate:
+      ddl-auto: update # Temporairement passé en update pour appliquer l'ajout de la colonne 'bio'
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    enabled: true
+    schemas: public
+    locations: classpath:db/migration/public
+    baseline-on-migrate: true
+    out-of-order: true
+    # Permet de reparer automatiquement en cas de mismatch de checksum si supporté par la version
+    # Sinon forcera au moins l'execution des migrations manquantes
+    validate-on-migrate: true
+
+  # Configuration de l'envoi d'emails (Spring Boot 4)
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:nguetchuissibrunel@gmail.com}
+    password: ${MAIL_PASSWORD:ztzjsteckxohwhlm}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# JWT Configuration
+jwt:
+  # Doit faire au moins 256 bits (32 caracteres) pour HS256
+  secret: ${JWT_SECRET:YowPainterSuperSecretKey1234567890ThisIsLongEnough}
+  expiration: 900000 # 15 minutes en ms
+  refresh-expiration: 604800000 # 7 jours en ms
+
+# Custom App Properties
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  payment:
+    campay:
+      app-username: ${CAMPAY_USERNAME:Key6ZTdXKKxL7Ztlxr-PCH_IrgX15kgZU8ePwmE7QkYQa1uXxcPLxiAQ90Tf2pShnpRmNohOiapkZYDV-Ai0YQ}
+      app-password: ${CAMPAY_PASSWORD:tsElc7CIo0G8d7-ducw6zyu1PzHg3cf1bp2dLLAiKsGatlwtr-AjXV5zTyogiilxtp-UoFj00naLJbLTG3EjWg}
+      base-url: ${CAMPAY_BASE_URL:https://demo.campay.net/api}
+      token-url: /token/
+      collect-url: /collect/
+      transaction-url: /transaction/
+      withdraw-url: /withdraw/
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html

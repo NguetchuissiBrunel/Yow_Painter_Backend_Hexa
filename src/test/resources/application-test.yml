@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    open-in-view: true
+  logging:
+    level:
+      com.yowpainter: DEBUG
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        # Multi-tenancy by schema logic
+        multi_tenant_connection_provider: com.yowpainter.shared.tenant.SchemaMultiTenantConnectionProvider
+        multi_tenant_identifier_resolver: com.yowpainter.shared.tenant.TenantIdentifierResolver
+
+  flyway:
+    enabled: false # On laisse Hibernate créer les tables en mémoire pour la rapidité des tests unitaires
+
+jwt:
+  secret: YowPainterTestSecretKeyForIsolationTestingPurposesOnly1234567890
+  expiration: 3600000
+  refresh-expiration: 86400000
+
+app:
+  payment:
+    campay:
+      app-username: test-user
+      app-password: test-password
+      base-url: https://demo.campay.net/api

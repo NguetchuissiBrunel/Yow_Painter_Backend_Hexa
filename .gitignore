@@ -1,0 +1,57 @@
+# Local Configuration & Secrets
+.env
+.env.local
+.env.*.local
+application-local.yml
+application-local.properties
+application-dev.yml
+application-dev.properties
+*.secret
+*.pem
+*.key
+*.jks
+
+# IDE - IntelliJ
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+cmake-build-*/
+
+# IDE - VS Code
+.vscode/
+
+# IDE - Eclipse
+.settings/
+.classpath
+.project
+.factorypath
+.recommenders/
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Logs
+*.log
+logs/
+temp/
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# SQL / DB
+*.sql
+*.sqlite
+data/

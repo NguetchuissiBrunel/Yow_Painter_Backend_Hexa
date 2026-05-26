@@ -1,93 +1,161 @@
-# yowpainter-backend
 
+# YowPainter Backend API 🎨
 
+Une plateforme SaaS multi-tenant moderne conçue pour les artistes et les collectionneurs d'art. Le backend gère l'isolation complète des données pour chaque artiste (tenant) tout en offrant une expérience fluide pour les acheteurs sur le schéma public.
 
-## Getting started
+## 🚀 Stack Technique
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Le projet a été récemment modernisé vers les standards les plus récents :
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+*   **Framework** : Spring Boot 4.0.0 (basé sur Spring Framework 7.0)
+*   **Base de Données** : PostgreSQL 18.0
+*   **Multi-Tenancy** : Isolation par schéma (Schema-per-tenant) via Hibernate 6
+*   **Sécurité** : Spring Security 7.0 avec Authentification JWT (Stateless)
+*   **Paiements** : Intégration mobile money via **CamPay** (MTN, Orange, MoMo Pay)
+*   **Migrations** : Flyway (gestion automatique des schémas public et artistes)
+*   **Documentation** : OpenAPI 3 / Swagger UI (SpringDoc v3)
+*   **E-mails** : Spring Boot Mail (pour la récupération de mot de passe)
+*   **Utilitaires** : Lombok, Jakarta Validation
 
-## Add your files
+## 🏗️ Architecture du Projet
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+Le backend de YowPainter suit une **Architecture Hexagonale (Ports & Adapters)** couplée à une approche **modulaire**. Cette structure assure une séparation stricte entre la logique métier pure (le domaine) et les détails techniques (bases de données, frameworks web, services tiers).
 
+### 🌌 Avantages de cette architecture
+1. **Indépendance des Frameworks** : Le cœur de l'application (le Domaine) ne dépend d'aucune bibliothèque externe ni du framework Spring Boot.
+2. **Facilité de Test** : La logique métier peut être testée unitairement de manière extrêmement simple et rapide en simulant (mockant) ou en implémentant de simples doublons (stubs) pour les ports de sortie.
+3. **Flexibilité et Évolutivité** : Remplacer un composant technique (ex: changer de base de données ou de fournisseur de paiement comme CamPay) se fait simplement en implémentant un nouvel adaptateur sans altérer la logique métier centrale.
+
+---
+
+### 🎨 Schéma de l'Architecture
+
+```mermaid
+flowchart TB
+    subgraph Infrastructure [Couche Infrastructure (Adapters)]
+        direction TB
+        in_rest[REST Controllers / DTOs]
+        in_ws[WebSocket Endpoints]
+        out_jpa[JPA Repositories]
+        out_client[CamPay Payment API Client]
+        out_mail[Email Sender API Implementation]
+    end
+
+    subgraph Application [Couche Application (Use Cases)]
+        services[Application Services <br> (Orchestration des flux métier)]
+    end
+
+    subgraph Domain [Couche Domaine (Cœur Métier)]
+        direction TB
+        ports_out[Ports de sortie / Outbound Ports <br> (Interfaces: AppUserRepositoryPort, etc.)]
+        models[Modèles de Domaine & Règles Métier <br> (AppUser, Artwork, Payment...)]
+    end
+
+    in_rest & in_ws -->|Invoquent| services
+    services -->|Coordonne| models
+    services -->|Utilise| ports_out
+    out_jpa -.->|Implémente| ports_out
+    out_client -.->|Implémente| ports_out
+    out_mail -.->|Implémente| ports_out
+
+    style Domain fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    style Application fill:#efebe9,stroke:#5d4037,stroke-width:2px
+    style Infrastructure fill:#efe8e9,stroke:#b00020,stroke-width:2px
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/landrybrunel5/yowpainter-backend.git
-git branch -M main
-git push -uf origin main
+
+### 📂 Structure Modulaire des Packages
+
+Le code est structuré en **modules verticaux** autonomes (ex: `auth`, `payment`, `artwork`, `artist`, etc.) situés sous `com.yowpainter.modules`. 
+Chaque module respecte scrupuleusement le découpage hexagonal suivant :
+
+```text
+com.yowpainter.modules.<nom-du-module>/
+├── domain/                         # Couche Domaine (Cœur Métier)
+│   ├── model/                      # Entités pures et objets de valeur (ex: AppUser)
+│   └── port/                       # Interfaces définissant les besoins du domaine
+│       └── out/                    # Ports de sortie (Interfaces de dépôts, ex: AppUserRepositoryPort)
+│
+├── application/                    # Couche Application (Orchestration)
+│   └── service/                    # Services applicatifs (ex: AuthService, coordinateur des cas d'utilisation)
+│
+└── infrastructure/                 # Couche Infrastructure (Adapters)
+    └── adapter/                    # Implémentations concrètes des interactions externes
+        ├── in/                     # Adaptateurs d'entrée (Driving Adapters: REST controllers, DTOs, WebSockets)
+        └── out/                    # Adaptateurs de sortie (Driven Adapters: persistence JPA, clients HTTP tiers)
+            └── persistence/        # Implémentations concrètes des ports de sortie JPA (ex: AppUserRepositoryRepositoryAdapter)
 ```
 
-## Integrate with your tools
+## ✨ Fonctionnalités Clés
 
-* [Set up project integrations](https://gitlab.com/landrybrunel5/yowpainter-backend/-/settings/integrations)
+### 🔐 Authentification & Sécurité
+*   **Inscription & Connexion** : Support des rôles ARTISTE, ACHETEUR et ADMIN.
+*   **Multi-Tenant Provisioning** : Chaque nouvel artiste reçoit automatiquement son propre schéma de base de données isolé.
+*   **Réinitialisation de mot de passe** : Système complet par jeton UUID envoyé par e-mail sécurisé.
 
-## Collaborate with your team
+### 💰 Système de Paiement (CamPay)
+*   **Flux Mobile Money** : Notification USSD Push directe sur le téléphone de l'acheteur.
+*   **Boutique (Shop)** : Paiement des commandes d'articles d'art.
+*   **Événements** : Réservation et paiement de billets pour des vernissages ou expositions.
+*   **Callbacks** : Réception automatique des notifications de succès/échec de paiement.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### 🎨 Gestion Artistique
+*   **Artwork** : Gestion des collections et des images d'œuvres.
+*   **Artiste** : Profil personnalisable avec slug unique (utilisé comme identifiant de tenant).
+*   **Recherche** : Système de recherche global et filtré.
 
-## Test and Deploy
+### 🔔 Notifications & Abonnements
+*   **Alertes** : Système de notification interne pour les nouvelles commandes ou réservations.
+*   **Abonnements** : Gestion des abonnés aux profils d'artistes.
 
-Use the built-in continuous integration in GitLab.
+### 💬 Messagerie en Temps Réel (WebSockets)
+L'application utilise le protocole STOMP sur WebSockets pour le chat instantané.
+*   **Endpoint de connexion** : `/ws` (Support SockJS activé).
+*   **Authentification** : Envoyer le token JWT dans le header `Authorization: Bearer <token>` lors de la connexion STOMP.
+*   **Destination d'envoi** : `/app/chat`
+*   **Abonnement réception** : `/user/queue/messages` (pour les messages privés).
+*   **Payload (JSON)** : Contient `senderId`, `recipientId`, `content` et `timestamp`.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+## ⚙️ Configuration & Installation
 
-***
+### Prérequis
+*   Java 17 ou supérieur
+*   Maven 3.9+
+*   PostgreSQL 18
 
-# Editing this README
+### Configuration (`src/main/resources/application.yml`)
+Vous devez configurer les variables suivantes :
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/nom_votre_db
+    username: votre_user
+    password: votre_password
+  mail:
+    host: smtp.votre_fournisseur.com
+    username: votre_email@exemple.com
+    password: votre_mot_de_passe_app
 
-## Suggestions for a good README
+jwt:
+  secret: votre_cle_secrete_de_32_caracteres_minimum
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+app:
+  payment:
+    campay:
+      app-username: votre_campay_user
+      app-password: votre_campay_password
+  frontend-url: http://localhost:3000
+```
 
-## Name
-Choose a self-explaining name for your project.
+### Lancement
+```bash
+mvn clean install
+mvn spring-boot:run
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 📖 API Documentation
+Une fois l'application lancée, la documentation interactive Swagger est accessible à l'adresse :
+`http://localhost:8080/swagger-ui.html`
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+---
+*YowPainter - Propulsant la nouvelle génération d'artistes.*

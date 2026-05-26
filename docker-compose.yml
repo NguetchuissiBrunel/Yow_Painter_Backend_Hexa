@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: yowpainter_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: landry
+      POSTGRES_DB: EventSaas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - yowpainter_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: yowpainter_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - yowpainter_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+
+networks:
+  yowpainter_network:
+    driver: bridge
