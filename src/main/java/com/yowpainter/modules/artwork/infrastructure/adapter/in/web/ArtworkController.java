@@ -18,6 +18,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+import com.yowpainter.modules.artwork.infrastructure.adapter.in.web.dto.ArtworkImageUploadResponse;
 
 import java.util.List;
 import java.util.UUID;
@@ -49,6 +52,16 @@ public class ArtworkController {
     @Operation(summary = "Rechercher des oeuvres dans une boutique spécifique")
     public ResponseEntity<List<ArtworkResponse>> searchArtworks(@PathVariable String artistSlug, @RequestParam String q) {
         return ResponseEntity.ok(artworkService.searchArtworksByArtistSlug(artistSlug, q));
+    }
+
+    @PostMapping(value = "/artworks/images/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ARTIST')")
+    @Operation(summary = "Uploader une image d'oeuvre via le kernel (mode kernel uniquement)")
+    public ResponseEntity<ArtworkImageUploadResponse> uploadArtworkImage(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(artworkService.uploadArtworkImage(userDetails.getUsername(), file));
     }
 
     @PostMapping("/artworks")

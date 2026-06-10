@@ -29,6 +29,9 @@ public class Artwork {
     @Column(name = "artist_id", nullable = false)
     private UUID artistId;
 
+    @Column(name = "organization_id")
+    private UUID organizationId;
+
     @Column(nullable = false)
     private String title;
 

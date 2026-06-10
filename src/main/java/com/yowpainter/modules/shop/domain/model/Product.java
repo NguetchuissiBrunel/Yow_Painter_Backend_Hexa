@@ -46,4 +46,10 @@ public class Product {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean isActive = true;
+
+    @Column(name = "kernel_product_id")
+    private UUID kernelProductId;
+
+    @Column(name = "organization_id")
+    private UUID organizationId;
 }

@@ -37,7 +37,7 @@ public class RegisterRequest {
     @Schema(description = "Slug unique (URL). Sera auto-généré si vide.", example = "jean-dupont")
     private String slug;
 
-    @Schema(name = "imageURL", description = "URL de l'image de profil", example = "https://res.cloudinary.com/...")
+    @Schema(name = "imageURL", description = "Deprecated — utiliser POST /api/me/profile-picture apres inscription", deprecated = true)
     @JsonProperty("imageURL")
     private String imageUrl;
 }

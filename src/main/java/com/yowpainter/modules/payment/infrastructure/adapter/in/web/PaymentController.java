@@ -2,7 +2,6 @@ package com.yowpainter.modules.payment.infrastructure.adapter.in.web;
 
 import com.yowpainter.modules.payment.infrastructure.adapter.in.web.dto.PaymentResponse;
 import com.yowpainter.modules.payment.application.service.PaymentService;
-import com.yowpainter.shared.tenant.TenantContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

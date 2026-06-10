@@ -11,18 +11,16 @@ import com.yowpainter.modules.auth.domain.model.AppUser;
 import com.yowpainter.modules.auth.domain.port.out.AppUserRepositoryPort;
 import com.yowpainter.modules.shop.domain.port.out.ProductRepositoryPort;
 import com.yowpainter.modules.notification.application.service.NotificationService;
-import com.yowpainter.shared.tenant.TenantContext;
+import com.yowpainter.shared.context.RequestContext;
+import com.yowpainter.shared.kernel.port.KernelFilePort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,7 +35,33 @@ public class ArtworkService {
     private final ArtworkCommentRepositoryPort commentRepository;
     private final ProductRepositoryPort productRepository;
     private final NotificationService notificationService;
-    private final PlatformTransactionManager transactionManager;
+    private final KernelFilePort kernelFilePort;
+
+    public ArtworkImageUploadResponse uploadArtworkImage(String artistEmail, MultipartFile file) {
+        Artist artist = artistRepository.findByEmail(artistEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Artiste introuvable"));
+        if (artist.getOrganizationId() == null) {
+            throw new IllegalStateException("Organisation kernel manquante pour cet artiste");
+        }
+        try {
+            KernelFilePort.FileView uploaded = kernelFilePort.upload(
+                    new KernelFilePort.UploadFileCommand(
+                            artist.getOrganizationId(),
+                            file.getBytes(),
+                            file.getOriginalFilename(),
+                            file.getContentType(),
+                            "ARTWORK_IMAGE"
+                    ),
+                    RequestContext.accessToken()
+            );
+            return ArtworkImageUploadResponse.builder()
+                    .fileId(uploaded.id())
+                    .imageUrl(uploaded.downloadUrl())
+                    .build();
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Impossible de lire le fichier image", ex);
+        }
+    }
 
     @Transactional
     public ArtworkResponse createArtwork(String artistEmail, ArtworkCreateRequest request) {
@@ -46,6 +70,7 @@ public class ArtworkService {
 
         Artwork artwork = Artwork.builder()
                 .artistId(artist.getId())
+                .organizationId(artist.getOrganizationId())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .technique(request.getTechnique())
@@ -61,29 +86,8 @@ public class ArtworkService {
     }
 
     public List<ArtworkResponse> getPublicArtworks() {
-        List<Artist> artists = artistRepository.findAll();
-        log.info("Starting parallel artwork aggregation for {} artists", artists.size());
-
-        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        transactionTemplate.setReadOnly(true);
-
-        List<CompletableFuture<List<ArtworkResponse>>> futures = artists.stream()
-                .map(artist -> CompletableFuture.supplyAsync(() -> {
-                    return TenantContext.executeInTenant(artist.getSlug(), () -> 
-                        transactionTemplate.execute(status -> {
-                            return artworkRepository.findPublicArtworks().stream()
-                                    .map(this::mapToResponse)
-                                    .collect(Collectors.toList());
-                        })
-                    );
-                }))
-                .collect(Collectors.toList());
-
-        return futures.stream()
-                .map(CompletableFuture::join)
-                .filter(Objects::nonNull)
-                .flatMap(List::stream)
+        return artworkRepository.findPublicArtworks().stream()
+                .map(this::mapToResponse)
                 .sorted(Comparator.comparing(ArtworkResponse::getPublishedAt, Comparator.nullsLast(Comparator.<LocalDateTime>reverseOrder())))
                 .collect(Collectors.toList());
     }
@@ -117,29 +121,8 @@ public class ArtworkService {
     }
 
     public List<ArtworkResponse> searchArtworks(String query) {
-        List<Artist> artists = artistRepository.findAll();
-        log.info("Starting parallel artwork search for {} artists", artists.size());
-
-        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        transactionTemplate.setReadOnly(true);
-
-        List<CompletableFuture<List<ArtworkResponse>>> futures = artists.stream()
-                .map(artist -> CompletableFuture.supplyAsync(() -> {
-                    return TenantContext.executeInTenant(artist.getSlug(), () -> 
-                        transactionTemplate.execute(status -> {
-                            return artworkRepository.searchPublicArtworks(query).stream()
-                                    .map(this::mapToResponse)
-                                    .collect(Collectors.toList());
-                        })
-                    );
-                }))
-                .collect(Collectors.toList());
-
-        return futures.stream()
-                .map(CompletableFuture::join)
-                .filter(Objects::nonNull)
-                .flatMap(List::stream)
+        return artworkRepository.searchPublicArtworks(query).stream()
+                .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
@@ -151,29 +134,8 @@ public class ArtworkService {
     }
 
     public List<ArtworkResponse> getFeaturedArtworks() {
-        List<Artist> artists = artistRepository.findAll();
-        log.info("Starting parallel featured artworks fetch for {} artists", artists.size());
-
-        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        transactionTemplate.setReadOnly(true);
-
-        List<CompletableFuture<List<ArtworkResponse>>> futures = artists.stream()
-                .map(artist -> CompletableFuture.supplyAsync(() -> {
-                    return TenantContext.executeInTenant(artist.getSlug(), () -> 
-                        transactionTemplate.execute(status -> {
-                            return artworkRepository.findFeaturedArtworks().stream()
-                                    .map(this::mapToResponse)
-                                    .collect(Collectors.toList());
-                        })
-                    );
-                }))
-                .collect(Collectors.toList());
-
-        return futures.stream()
-                .map(CompletableFuture::join)
-                .filter(Objects::nonNull)
-                .flatMap(List::stream)
+        return artworkRepository.findFeaturedArtworks().stream()
+                .map(this::mapToResponse)
                 .sorted(Comparator.comparing(ArtworkResponse::getLikeCount).reversed())
                 .collect(Collectors.toList());
     }

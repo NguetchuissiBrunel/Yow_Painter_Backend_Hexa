@@ -145,11 +145,8 @@ public class PaymentService {
         AppUser user = userRepository.findById(payment.getUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouve"));
 
-        // Déclencher la logique métier associée dans le bon schéma
+        String referenceType = payment.getReferenceType();
         try {
-            com.yowpainter.shared.tenant.TenantContext.setTenantId(payment.getTenantId());
-            
-            String referenceType = payment.getReferenceType();
             UUID userId = payment.getUserId();
 
             if ("ORDER".equals(referenceType) || "RESERVATION".equals(referenceType)) {
@@ -193,8 +190,9 @@ public class PaymentService {
                 notificationService.createNotification(userId, "Votre abonnement " + plan.name() + " a été activé avec succès !");
                 emailService.sendPaymentConfirmation(user.getEmail(), "Abonnement " + plan.name(), payment.getAmount());
             }
-        } finally {
-            com.yowpainter.shared.tenant.TenantContext.clear();
+        } catch (Exception ex) {
+            log.error("Erreur traitement paiement {}: {}", referenceId, ex.getMessage(), ex);
+            throw ex;
         }
     }
 

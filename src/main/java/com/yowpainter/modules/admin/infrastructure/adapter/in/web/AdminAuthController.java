@@ -37,6 +37,10 @@ public class AdminAuthController {
             return ResponseEntity.badRequest().body(AuthResponse.builder()
                     .message(e.getMessage())
                     .build());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_IMPLEMENTED).body(AuthResponse.builder()
+                    .message(e.getMessage())
+                    .build());
         } catch (Exception e) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(AuthResponse.builder()

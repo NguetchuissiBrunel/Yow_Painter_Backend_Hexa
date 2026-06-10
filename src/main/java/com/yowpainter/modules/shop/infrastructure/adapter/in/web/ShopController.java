@@ -8,7 +8,6 @@ import com.yowpainter.modules.shop.domain.model.Order;
 import com.yowpainter.modules.shop.domain.model.OrderStatus;
 import com.yowpainter.modules.shop.application.service.ShopService;
 import com.yowpainter.modules.payment.application.service.PaymentService;
-import com.yowpainter.shared.tenant.TenantIdentifierResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -32,7 +31,6 @@ public class ShopController {
 
     private final ShopService shopService;
     private final PaymentService paymentService;
-    private final TenantIdentifierResolver tenantResolver;
 
     @PostMapping("/products")
     @PreAuthorize("hasRole('ARTIST')")
@@ -76,13 +74,12 @@ public class ShopController {
             @AuthenticationPrincipal UserDetails userDetails) {
         
         OrderResponse order = shopService.getOrderById(id);
-        String tenantId = tenantResolver.resolveCurrentTenantIdentifier();
-        
+
         String paymentReference = paymentService.initiateMobileMoneyPayment(
                 id, 
                 "ORDER", 
                 order.getTotalAmount(), 
-                tenantId, 
+                "public",
                 userDetails.getUsername(),
                 phoneNumber
         );

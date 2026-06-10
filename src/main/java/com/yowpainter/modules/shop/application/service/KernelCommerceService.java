@@ -1,0 +1,223 @@
+package com.yowpainter.modules.shop.application.service;
+
+import com.yowpainter.config.KernelProperties;
+import com.yowpainter.modules.artist.domain.model.Artist;
+import com.yowpainter.modules.artist.domain.port.out.ArtistRepositoryPort;
+import com.yowpainter.modules.artwork.domain.model.Artwork;
+import com.yowpainter.modules.artwork.domain.port.out.ArtworkRepositoryPort;
+import com.yowpainter.modules.auth.domain.model.AppUser;
+import com.yowpainter.modules.auth.domain.port.out.AppUserRepositoryPort;
+import com.yowpainter.modules.shop.domain.model.Order;
+import com.yowpainter.modules.shop.domain.model.OrderItem;
+import com.yowpainter.modules.shop.domain.model.OrderStatus;
+import com.yowpainter.modules.shop.domain.model.Product;
+import com.yowpainter.modules.shop.domain.port.out.OrderRepositoryPort;
+import com.yowpainter.modules.shop.domain.port.out.ProductRepositoryPort;
+import com.yowpainter.modules.shop.infrastructure.adapter.in.web.dto.OrderCreateRequest;
+import com.yowpainter.modules.shop.infrastructure.adapter.in.web.dto.OrderItemResponse;
+import com.yowpainter.modules.shop.infrastructure.adapter.in.web.dto.OrderResponse;
+import com.yowpainter.modules.shop.infrastructure.adapter.in.web.dto.ProductCreateRequest;
+import com.yowpainter.modules.shop.infrastructure.adapter.in.web.dto.ProductResponse;
+import com.yowpainter.shared.context.RequestContext;
+import com.yowpainter.shared.kernel.port.KernelProductPort;
+import com.yowpainter.shared.kernel.port.KernelSalesPort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class KernelCommerceService {
+
+    private final KernelProductPort kernelProductPort;
+    private final KernelSalesPort kernelSalesPort;
+    private final ArtistRepositoryPort artistRepository;
+    private final ArtworkRepositoryPort artworkRepository;
+    private final ProductRepositoryPort productRepository;
+    private final OrderRepositoryPort orderRepository;
+    private final AppUserRepositoryPort appUserRepository;
+    private final KernelProperties kernelProperties;
+
+    @Transactional
+    public ProductResponse createProduct(String artistEmail, ProductCreateRequest request) {
+        Artist artist = artistRepository.findByEmail(artistEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Artiste introuvable"));
+        if (artist.getOrganizationId() == null) {
+            throw new IllegalStateException("Organisation kernel manquante pour cet artiste");
+        }
+
+        String accessToken = requireAccessToken();
+        Artwork artwork = null;
+        if (request.getArtworkId() != null) {
+            artwork = artworkRepository.findById(request.getArtworkId()).orElseThrow();
+            if (!artwork.getArtistId().equals(artist.getId())) {
+                throw new IllegalStateException("Not authorized");
+            }
+            artwork.setStatus(com.yowpainter.modules.artwork.domain.model.ArtworkStatus.ON_SALE);
+            artwork.setOrganizationId(artist.getOrganizationId());
+            artworkRepository.save(artwork);
+        }
+
+        String sku = "ART-" + (artwork != null ? artwork.getId() : UUID.randomUUID()).toString().substring(0, 8);
+        KernelProductPort.ProductView kernelProduct = kernelProductPort.createProduct(
+                new KernelProductPort.CreateProductCommand(
+                        artist.getOrganizationId(),
+                        sku,
+                        request.getName(),
+                        request.getDescription(),
+                        request.getPrice(),
+                        kernelProperties.defaultCurrency()
+                ),
+                accessToken
+        );
+
+        Product localProduct = Product.builder()
+                .artistId(artist.getId())
+                .artwork(artwork)
+                .name(kernelProduct.name())
+                .description(kernelProduct.description())
+                .price(kernelProduct.unitPrice())
+                .stockQuantity(request.getStockQuantity() > 0 ? request.getStockQuantity() : 1)
+                .isActive(true)
+                .kernelProductId(kernelProduct.id())
+                .organizationId(artist.getOrganizationId())
+                .build();
+
+        return mapToProductResponse(productRepository.save(localProduct));
+    }
+
+    public List<ProductResponse> getProductsByArtistSlug(String slug) {
+        Artist artist = artistRepository.findBySlug(slug)
+                .orElseThrow(() -> new IllegalArgumentException("Artiste non trouve"));
+        return productRepository.findByArtistIdAndIsActiveTrue(artist.getId()).stream()
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<ProductResponse> getAllPublicProducts() {
+        return productRepository.findByIsActiveTrue().stream()
+                .filter(product -> product.getKernelProductId() != null)
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public OrderResponse placeOrder(String buyerEmail, OrderCreateRequest request) {
+        AppUser buyer = appUserRepository.findByEmail(buyerEmail).orElseThrow();
+        Product product = productRepository.findById(request.getProductId()).orElseThrow();
+        if (product.getKernelProductId() == null || product.getOrganizationId() == null) {
+            throw new IllegalStateException("Produit non synchronise avec le kernel");
+        }
+
+        String accessToken = requireAccessToken();
+        KernelSalesPort.SalesOrderView kernelOrder = kernelSalesPort.createOrder(
+                new KernelSalesPort.CreateSalesOrderCommand(
+                        product.getOrganizationId(),
+                        product.getKernelProductId(),
+                        BigDecimal.valueOf(request.getQuantity()),
+                        product.getPrice(),
+                        kernelProperties.defaultCurrency(),
+                        "YP-" + UUID.randomUUID().toString().substring(0, 8)
+                ),
+                accessToken
+        );
+
+        if (product.getStockQuantity() <= request.getQuantity() && product.getArtwork() != null) {
+            Artwork artwork = product.getArtwork();
+            artwork.setStatus(com.yowpainter.modules.artwork.domain.model.ArtworkStatus.SOLD);
+            artworkRepository.save(artwork);
+        }
+
+        Order order = Order.builder()
+                .buyerId(buyer.getId())
+                .shippingAddress(request.getShippingAddress())
+                .status(mapKernelStatus(kernelOrder.status()))
+                .totalAmount(kernelOrder.totalAmount() != null ? kernelOrder.totalAmount() : product.getPrice())
+                .kernelSalesOrderId(kernelOrder.id())
+                .organizationId(product.getOrganizationId())
+                .build();
+        order.addItem(OrderItem.builder()
+                .product(product)
+                .quantity(request.getQuantity())
+                .unitPrice(product.getPrice())
+                .build());
+
+        return mapToOrderResponse(orderRepository.save(order));
+    }
+
+    public List<OrderResponse> getMySales(String artistEmail) {
+        Artist artist = artistRepository.findByEmail(artistEmail).orElseThrow();
+        return orderRepository.findByOrganizationIdOrderByCreatedAtDesc(artist.getOrganizationId()).stream()
+                .map(this::mapToOrderResponse)
+                .collect(Collectors.toList());
+    }
+
+    public OrderResponse getOrderById(UUID orderId) {
+        return mapToOrderResponse(orderRepository.findById(orderId)
+                .orElseThrow(() -> new IllegalArgumentException("Commande non trouvée")));
+    }
+
+    public List<ProductResponse> getInventory(String artistEmail) {
+        Artist artist = artistRepository.findByEmail(artistEmail).orElseThrow();
+        return productRepository.findByArtistId(artist.getId()).stream()
+                .map(this::mapToProductResponse)
+                .collect(Collectors.toList());
+    }
+
+    private String requireAccessToken() {
+        String token = RequestContext.accessToken();
+        if (token == null || token.isBlank()) {
+            throw new IllegalStateException("Token utilisateur requis pour les operations commerce kernel");
+        }
+        return token;
+    }
+
+    private OrderStatus mapKernelStatus(String kernelStatus) {
+        if (kernelStatus == null) {
+            return OrderStatus.PENDING_PAYMENT;
+        }
+        return switch (kernelStatus.toUpperCase()) {
+            case "CONFIRMED", "COMPLETED" -> OrderStatus.PAID;
+            case "CANCELLED" -> OrderStatus.CANCELLED;
+            default -> OrderStatus.PENDING_PAYMENT;
+        };
+    }
+
+    private OrderResponse mapToOrderResponse(Order order) {
+        AppUser buyer = appUserRepository.findById(order.getBuyerId()).orElse(null);
+        String buyerName = buyer != null ? buyer.getFirstName() + " " + buyer.getLastName() : "Inconnu";
+        return OrderResponse.builder()
+                .id(order.getId())
+                .buyerId(order.getBuyerId())
+                .buyerName(buyerName)
+                .status(order.getStatus())
+                .totalAmount(order.getTotalAmount())
+                .shippingAddress(order.getShippingAddress())
+                .createdAt(order.getCreatedAt())
+                .items(order.getItems().stream().map(i -> OrderItemResponse.builder()
+                        .productId(i.getProduct().getId())
+                        .productName(i.getProduct().getName())
+                        .quantity(i.getQuantity())
+                        .unitPrice(i.getUnitPrice())
+                        .build()).collect(Collectors.toList()))
+                .build();
+    }
+
+    private ProductResponse mapToProductResponse(Product product) {
+        return ProductResponse.builder()
+                .id(product.getId())
+                .artistId(product.getArtistId())
+                .artworkId(product.getArtwork() != null ? product.getArtwork().getId() : null)
+                .name(product.getName())
+                .description(product.getDescription())
+                .price(product.getPrice())
+                .stockQuantity(product.getStockQuantity())
+                .isActive(product.isActive())
+                .build();
+    }
+}

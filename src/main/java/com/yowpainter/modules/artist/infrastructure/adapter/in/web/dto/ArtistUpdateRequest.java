@@ -10,7 +10,6 @@ public class ArtistUpdateRequest {
     @NotBlank
     private String artistName;
     private String bio;
-    private String profilePictureUrl;
     private String bannerUrl;
     private String location;
 }

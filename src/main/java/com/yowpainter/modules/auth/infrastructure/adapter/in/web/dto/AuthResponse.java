@@ -6,6 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.UUID;
+
 @Data
 @Builder
 @AllArgsConstructor
@@ -22,4 +25,18 @@ public class AuthResponse {
     private String tenantId;
     private String artistName;
     private String message;
+    private UUID kernelUserId;
+    private UUID organizationId;
+    private List<OrganizationAccessResponse> organizations;
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class OrganizationAccessResponse {
+        private UUID organizationId;
+        private String organizationCode;
+        private String displayName;
+        private List<String> services;
+    }
 }

@@ -1,0 +1,33 @@
+package com.yowpainter.modules.auth.infrastructure.adapter.in.web;
+
+import com.yowpainter.modules.auth.application.service.UserProfileImageService;
+import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.ProfileImageUploadResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+@RestController
+@RequestMapping("/api/me")
+@RequiredArgsConstructor
+@Tag(name = "User Profile", description = "Profil utilisateur (fichiers kernel)")
+public class UserProfileController {
+
+    private final UserProfileImageService userProfileImageService;
+
+    @PostMapping(value = "/profile-picture", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Uploader la photo de profil via le kernel (multipart)")
+    public ResponseEntity<ProfileImageUploadResponse> uploadProfilePicture(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(userProfileImageService.uploadProfilePicture(userDetails.getUsername(), file));
+    }
+}

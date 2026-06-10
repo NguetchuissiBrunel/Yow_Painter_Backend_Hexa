@@ -4,7 +4,7 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: password
-  
+
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -16,17 +16,20 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
-        # Multi-tenancy by schema logic
-        multi_tenant_connection_provider: com.yowpainter.shared.tenant.SchemaMultiTenantConnectionProvider
-        multi_tenant_identifier_resolver: com.yowpainter.shared.tenant.TenantIdentifierResolver
 
   flyway:
-    enabled: false # On laisse Hibernate créer les tables en mémoire pour la rapidité des tests unitaires
+    enabled: false
 
-jwt:
-  secret: YowPainterTestSecretKeyForIsolationTestingPurposesOnly1234567890
-  expiration: 3600000
-  refresh-expiration: 86400000
+ksm:
+  kernel:
+    base-url: http://localhost:9999
+    client-id: test-client
+    api-key: test-api-key
+    tenant-id: 11111111-1111-1111-1111-111111111111
+    default-plan-code: COMMERCE
+    default-currency: XAF
+    kafka:
+      enabled: false
 
 app:
   payment:

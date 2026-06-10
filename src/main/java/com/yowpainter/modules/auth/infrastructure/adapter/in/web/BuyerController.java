@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.yowpainter.modules.auth.domain.port.out.AppUserRepositoryPort;
 import com.yowpainter.modules.auth.domain.model.AppUser;
-import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.UpdateProfilePictureRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.BuyerUpdateRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.BuyerProfileResponse;
 import jakarta.validation.Valid;
@@ -35,17 +34,6 @@ public class BuyerController {
         return ResponseEntity.ok(mapToResponse(user));
     }
 
-    @PutMapping("/me/profile-picture")
-    @Operation(summary = "Mettre à jour la photo de profil de l'acheteur")
-    public ResponseEntity<BuyerProfileResponse> updateProfilePicture(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @Valid @RequestBody UpdateProfilePictureRequest request) {
-        AppUser user = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("Utilisateur non trouvé"));
-        user.setProfilePictureUrl(request.getProfilePictureUrl());
-        return ResponseEntity.ok(mapToResponse(userRepository.save(user)));
-    }
-    
     @PutMapping("/me")
     @Operation(summary = "Mettre à jour le profil de l'acheteur")
     public ResponseEntity<BuyerProfileResponse> updateProfile(

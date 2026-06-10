@@ -53,6 +53,9 @@ public class AppUser implements UserDetails {
     private String resetToken;
     private LocalDateTime resetTokenExpiry;
 
+    @Column(name = "kernel_user_id")
+    private UUID kernelUserId;
+
     // ----- UserDetails Methods -----
 
     @Override

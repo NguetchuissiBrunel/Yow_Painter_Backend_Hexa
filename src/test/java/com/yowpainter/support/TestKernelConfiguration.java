@@ -1,0 +1,256 @@
+package com.yowpainter.support;
+
+import com.yowpainter.modules.auth.application.port.out.KernelAuthPort;
+import com.yowpainter.shared.kernel.port.KernelAdministrationPort;
+import com.yowpainter.shared.kernel.port.KernelFilePort;
+import com.yowpainter.shared.kernel.port.KernelNotificationPort;
+import com.yowpainter.shared.kernel.port.KernelOrganizationPort;
+import com.yowpainter.shared.kernel.port.KernelProductPort;
+import com.yowpainter.shared.kernel.port.KernelSalesPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Configuration
+@Profile("test")
+public class TestKernelConfiguration {
+
+    private final Map<String, String> credentials = new ConcurrentHashMap<>();
+
+    @Bean
+    @Primary
+    KernelAuthPort testKernelAuthPort() {
+        return new KernelAuthPort() {
+            @Override
+            public KernelLoginResult login(String principal, String password) {
+                String stored = credentials.get(principal);
+                if (stored == null || !stored.equals(password)) {
+                    throw new com.yowpainter.shared.kernel.KernelClientException("Invalid credentials", null, null);
+                }
+                return buildLoginResult(principal);
+            }
+
+            @Override
+            public KernelLoginResult signUp(SignUpCommand command) {
+                credentials.put(command.email(), command.password());
+                return buildLoginResult(command.email());
+            }
+
+            @Override
+            public KernelLoginResult refresh(String refreshToken) {
+                return new KernelLoginResult(
+                        UUID.randomUUID(), null, UUID.randomUUID(),
+                        refreshToken, refreshToken, "test-token-" + refreshToken,
+                        refreshToken, "Bearer", 3600, Set.of("ROLE_BUYER"), List.of()
+                );
+            }
+
+            @Override
+            public void logout(String refreshToken) {
+            }
+
+            @Override
+            public KernelUserProfile me(String accessToken) {
+                String email = accessToken.replace("test-token-", "");
+                return new KernelUserProfile(UUID.randomUUID(), UUID.randomUUID(), email, email, List.of());
+            }
+
+            @Override
+            public ForgotPasswordResult forgotPassword(String principal) {
+                return new ForgotPasswordResult(
+                        principal,
+                        1,
+                        "selection-token",
+                        3600,
+                        List.of(new PasswordResetContext(
+                                "ctx-1",
+                                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                                UUID.randomUUID(),
+                                UUID.randomUUID(),
+                                principal,
+                                principal
+                        ))
+                );
+            }
+
+            @Override
+            public IssuedPasswordResetResult issuePasswordReset(String selectionToken, String contextId) {
+                return new IssuedPasswordResetResult("PREVIEW_ONLY", "reset-token-preview", 3600);
+            }
+
+            @Override
+            public void resetPassword(String resetToken, String newPassword) {
+                if (resetToken == null || resetToken.isBlank()) {
+                    throw new com.yowpainter.shared.kernel.KernelClientException("Invalid token", null, null);
+                }
+            }
+
+            private KernelLoginResult buildLoginResult(String email) {
+                return new KernelLoginResult(
+                        UUID.randomUUID(),
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        UUID.randomUUID(),
+                        email,
+                        email,
+                        "test-token-" + email,
+                        "refresh-" + email,
+                        "Bearer",
+                        3600,
+                        Set.of("ROLE_ARTIST"),
+                        List.of()
+                );
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelOrganizationPort testKernelOrganizationPort() {
+        return new KernelOrganizationPort() {
+            @Override
+            public OrganizationView createOrganization(CreateOrganizationCommand command, String accessToken) {
+                return new OrganizationView(
+                        UUID.randomUUID(),
+                        command.businessActorId(),
+                        command.code(),
+                        command.shortName(),
+                        command.longName()
+                );
+            }
+
+            @Override
+            public void applyCommercialPlan(UUID organizationId, String planCode, String accessToken) {
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelProductPort testKernelProductPort() {
+        return new KernelProductPort() {
+            @Override
+            public ProductView createProduct(CreateProductCommand command, String accessToken) {
+                return new ProductView(
+                        UUID.randomUUID(),
+                        command.organizationId(),
+                        command.sku(),
+                        command.name(),
+                        command.description(),
+                        command.unitPrice(),
+                        command.currency(),
+                        "ACTIVE"
+                );
+            }
+
+            @Override
+            public ProductView getProduct(UUID productId, String accessToken) {
+                return new ProductView(productId, UUID.randomUUID(), "SKU", "Test", null, BigDecimal.TEN, "XAF", "ACTIVE");
+            }
+
+            @Override
+            public List<ProductView> listProducts(UUID organizationId, String accessToken) {
+                return List.of();
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelSalesPort testKernelSalesPort() {
+        return new KernelSalesPort() {
+            @Override
+            public SalesOrderView createOrder(CreateSalesOrderCommand command, String accessToken) {
+                BigDecimal total = command.unitPrice().multiply(command.quantity());
+                return new SalesOrderView(
+                        UUID.randomUUID(),
+                        command.organizationId(),
+                        command.productId(),
+                        command.quantity(),
+                        command.unitPrice(),
+                        total,
+                        command.currency(),
+                        "PENDING"
+                );
+            }
+
+            @Override
+            public SalesOrderView getOrder(UUID orderId, String accessToken) {
+                return new SalesOrderView(orderId, UUID.randomUUID(), UUID.randomUUID(), BigDecimal.ONE, BigDecimal.TEN, BigDecimal.TEN, "XAF", "PENDING");
+            }
+
+            @Override
+            public SalesOrderView cancelOrder(UUID orderId, String accessToken) {
+                return getOrder(orderId, accessToken);
+            }
+
+            @Override
+            public SalesOrderView confirmOrder(UUID orderId, String accessToken) {
+                return getOrder(orderId, accessToken);
+            }
+
+            @Override
+            public List<SalesOrderView> listOrders(UUID organizationId, String accessToken) {
+                return List.of();
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelAdministrationPort testKernelAdministrationPort() {
+        UUID tenantAdminRoleId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        return new KernelAdministrationPort() {
+            @Override
+            public void provisionDefaultRoles() {
+            }
+
+            @Override
+            public List<AdministrativeRoleView> listRoles() {
+                return List.of(new AdministrativeRoleView(tenantAdminRoleId, "TENANT_ADMIN", "Tenant Admin"));
+            }
+
+            @Override
+            public void assignTenantAdminRole(UUID userId, UUID roleId) {
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelNotificationPort testKernelNotificationPort() {
+        return new KernelNotificationPort() {
+            @Override
+            public void send(SendNotificationCommand command, String accessToken) {
+            }
+
+            @Override
+            public List<DeliveryView> listDeliveries(UUID organizationId, String accessToken) {
+                return List.of();
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelFilePort testKernelFilePort() {
+        return new KernelFilePort() {
+            @Override
+            public FileView upload(UploadFileCommand command, String accessToken) {
+                return new FileView(
+                        UUID.randomUUID(),
+                        command.fileName(),
+                        command.contentType(),
+                        "http://localhost/files/" + UUID.randomUUID()
+                );
+            }
+        };
+    }
+}

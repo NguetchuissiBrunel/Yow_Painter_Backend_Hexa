@@ -4,9 +4,9 @@ import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.EventCreat
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.EventResponse;
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.ReservationResponse;
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.TicketResponse;
+import com.yowpainter.modules.artist.domain.port.out.ArtistRepositoryPort;
 import com.yowpainter.modules.event.application.service.EventService;
 import com.yowpainter.modules.payment.application.service.PaymentService;
-import com.yowpainter.shared.tenant.TenantIdentifierResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,7 +30,7 @@ public class EventController {
 
     private final EventService eventService;
     private final PaymentService paymentService;
-    private final TenantIdentifierResolver tenantResolver;
+    private final ArtistRepositoryPort artistRepository;
 
     @GetMapping("/public/events")
     @PreAuthorize("permitAll()")
@@ -126,7 +126,9 @@ public class EventController {
             return ResponseEntity.badRequest().body(Map.of("message", "Cet événement est gratuit"));
         }
         
-        String tenantId = tenantResolver.resolveCurrentTenantIdentifier();
+        String tenantId = artistRepository.findById(event.getArtistId())
+                .orElseThrow(() -> new IllegalArgumentException("Artiste non trouve"))
+                .getSlug();
         
         String paymentReference = paymentService.initiateMobileMoneyPayment(
                 id, 

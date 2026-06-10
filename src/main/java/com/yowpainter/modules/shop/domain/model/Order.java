@@ -38,6 +38,12 @@ public class Order {
     @Column(name = "shipping_address")
     private String shippingAddress;
 
+    @Column(name = "kernel_sales_order_id")
+    private UUID kernelSalesOrderId;
+
+    @Column(name = "organization_id")
+    private UUID organizationId;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

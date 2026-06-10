@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.AuthResponse;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.LoginRequest;
+import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.RefreshTokenRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.RegisterRequest;
 import com.yowpainter.modules.auth.application.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,9 +54,18 @@ public class AuthController {
 
     @PostMapping("/refresh")
     @Operation(summary = "Rafraichir le token JWT")
-    public ResponseEntity<AuthResponse> refresh(@RequestParam String refreshToken) {
+    public ResponseEntity<AuthResponse> refresh(
+            @RequestParam(required = false) String refreshToken,
+            @Valid @RequestBody(required = false) RefreshTokenRequest body
+    ) {
+        String token = body != null && body.getRefreshToken() != null ? body.getRefreshToken() : refreshToken;
+        if (token == null || token.isBlank()) {
+            return ResponseEntity.badRequest().body(AuthResponse.builder()
+                    .message("refreshToken est requis")
+                    .build());
+        }
         try {
-            return ResponseEntity.ok(authService.refreshToken(refreshToken));
+            return ResponseEntity.ok(authService.refreshToken(token));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AuthResponse.builder()
                     .message(e.getMessage())
@@ -65,7 +75,13 @@ public class AuthController {
 
     @PostMapping("/logout")
     @Operation(summary = "Se deconnecter")
-    public ResponseEntity<Void> logout(@AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<Void> logout(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestBody(required = false) RefreshTokenRequest body
+    ) {
+        if (body != null && body.getRefreshToken() != null) {
+            authService.logoutWithRefreshToken(body.getRefreshToken());
+        }
         if (userDetails instanceof com.yowpainter.modules.auth.domain.model.AppUser) {
             authService.logout((com.yowpainter.modules.auth.domain.model.AppUser) userDetails);
         }

@@ -352,7 +352,7 @@ public class EventServiceTest {
     }
 
     @Test
-    void cancelAbandonedReservationsForTenant_shouldCancelExpiredPendingReservations() {
+    void cancelAbandonedReservations_shouldCancelExpiredPendingReservations() {
         reservation.setStatus(ReservationStatus.PENDING);
         event.setReservedCount(1);
         event.setStatus(EventStatus.FULL);
@@ -360,7 +360,7 @@ public class EventServiceTest {
         when(reservationRepository.findByStatusAndReservedAtBefore(eq(ReservationStatus.PENDING), any(LocalDateTime.class)))
                 .thenReturn(List.of(reservation));
 
-        eventService.cancelAbandonedReservationsForTenant("tenant-123");
+        eventService.cancelAbandonedReservations();
 
         assertThat(reservation.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
         assertThat(event.getReservedCount()).isEqualTo(0);

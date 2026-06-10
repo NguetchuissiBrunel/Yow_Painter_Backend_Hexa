@@ -18,17 +18,14 @@ public class SubscriptionService {
     private final SubscriptionRepositoryPort subscriptionRepository;
     private final ArtistRepositoryPort artistRepository;
     private final com.yowpainter.modules.payment.application.service.PaymentService paymentService;
-    private final com.yowpainter.shared.tenant.TenantIdentifierResolver tenantResolver;
 
     public SubscriptionService(
             SubscriptionRepositoryPort subscriptionRepository,
             ArtistRepositoryPort artistRepository,
-            @org.springframework.context.annotation.Lazy com.yowpainter.modules.payment.application.service.PaymentService paymentService,
-            com.yowpainter.shared.tenant.TenantIdentifierResolver tenantResolver) {
+            @org.springframework.context.annotation.Lazy com.yowpainter.modules.payment.application.service.PaymentService paymentService) {
         this.subscriptionRepository = subscriptionRepository;
         this.artistRepository = artistRepository;
         this.paymentService = paymentService;
-        this.tenantResolver = tenantResolver;
     }
 
     public Subscription getSubscriptionForArtist(String email) {
@@ -64,7 +61,7 @@ public class SubscriptionService {
     @Transactional
     public String initiateSubscriptionUpgrade(String email, SubscriptionPlan plan, String phoneNumber) {
         Artist artist = artistRepository.findByEmail(email).orElseThrow();
-        String tenantId = tenantResolver.resolveCurrentTenantIdentifier();
+        String tenantId = artist.getSlug();
         
         // On utilise l'ID de l'artiste comme référence. 
         // Note: Si l'utilisateur fait plusieurs tentatives, cela écrasera la précédente dans le polling

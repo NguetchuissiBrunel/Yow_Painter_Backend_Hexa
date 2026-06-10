@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class UpdateProfilePictureRequest {
 
-    @NotBlank(message = "L'URL de la photo de profil est requise")
-    @Schema(description = "URL Cloudinary de la photo de profil", example = "https://res.cloudinary.com/...")
+    @Deprecated
+    @Schema(description = "Deprecated — utiliser POST /api/auth/me/profile-picture (multipart kernel)")
     private String profilePictureUrl;
 }

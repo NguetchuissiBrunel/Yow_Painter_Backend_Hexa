@@ -59,7 +59,6 @@ public class ArtistService {
         artist.setLastName(request.getLastName());
         artist.setArtistName(request.getArtistName());
         artist.setBio(request.getBio());
-        artist.setProfilePictureUrl(request.getProfilePictureUrl());
         artist.setBannerUrl(request.getBannerUrl());
         artist.setLocation(request.getLocation());
 

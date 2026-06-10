@@ -1,8 +1,8 @@
 package com.yowpainter.config;
 
-import com.yowpainter.shared.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.messaging.Message;
@@ -14,9 +14,10 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 import org.springframework.messaging.converter.MessageConverter;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -24,15 +25,16 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 @Order(Ordered.HIGHEST_PRECEDENCE + 99)
+@Profile("!test")
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
+    private final JwtDecoder jwtDecoder;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Override
@@ -55,8 +57,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
-                
-        // Aussi disponible sans SockJS pour les clients le supportant nativement
+
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*");
     }
@@ -74,19 +75,21 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         if (authHeader.startsWith("Bearer ")) {
                             try {
                                 String token = authHeader.substring(7);
-                                String username = jwtService.extractUsername(token);
-                                if (username != null) {
-                                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                                    if (jwtService.isTokenValid(token, userDetails)) {
-                                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                                                userDetails, null, userDetails.getAuthorities()
-                                        );
-                                        SecurityContextHolder.getContext().setAuthentication(authentication);
-                                        accessor.setUser(authentication);
-                                    }
+                                Jwt jwt = jwtDecoder.decode(token);
+                                String username = jwt.getClaimAsString("email");
+                                if (username == null || username.isBlank()) {
+                                    username = jwt.getSubject();
                                 }
+                                List<SimpleGrantedAuthority> authorities = jwt.getClaimAsStringList("authorities") == null
+                                        ? List.of()
+                                        : jwt.getClaimAsStringList("authorities").stream()
+                                        .map(SimpleGrantedAuthority::new)
+                                        .collect(Collectors.toList());
+                                UsernamePasswordAuthenticationToken authentication =
+                                        new UsernamePasswordAuthenticationToken(username, null, authorities);
+                                SecurityContextHolder.getContext().setAuthentication(authentication);
+                                accessor.setUser(authentication);
                             } catch (Exception e) {
-                                // Log error but allow message to continue (Security will block later if needed)
                                 System.err.println("WebSocket Auth Error: " + e.getMessage());
                             }
                         }

@@ -10,7 +10,7 @@ spring:
   datasource:
     # Connexion à la base de données sur Render.com
     # Pour le dev local, si l'hôte interne ne marche pas, tu devras utiliser l'External Database URL
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:dpg-d83kv9egvqtc73f3nlq0-a}:${DB_PORT:5432}/${DB_NAME:yowbackend}}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:dpg-d83kv9egvqtc73f3nlq0-a.oregon-postgres.render.com}:${DB_PORT:5432}/${DB_NAME:yowbackend}}
     username: ${DB_USER:yowbackend_user}
     password: ${DB_PASS:VNtMmiYQqBU18MrItVoJ1AU7fSCQX2vc}
     driver-class-name: org.postgresql.Driver
@@ -51,12 +51,23 @@ spring:
           starttls:
             enable: true
 
-# JWT Configuration
-jwt:
-  # Doit faire au moins 256 bits (32 caracteres) pour HS256
-  secret: ${JWT_SECRET:YowPainterSuperSecretKey1234567890ThisIsLongEnough}
-  expiration: 900000 # 15 minutes en ms
-  refresh-expiration: 604800000 # 7 jours en ms
+# Kernel RT-Comops (obligatoire — backend consommateur hexagonal)
+ksm:
+  kernel:
+    base-url: ${KSM_KERNEL_BASE_URL:http://localhost:8080}
+    client-id: ${KSM_KERNEL_CLIENT_ID:yowpainter-backend}
+    api-key: ${KSM_KERNEL_API_KEY:}
+    tenant-id: ${KSM_KERNEL_TENANT_ID:}
+    jwk-set-uri: ${KSM_KERNEL_JWK_SET_URI:}
+    default-plan-code: ${KSM_KERNEL_DEFAULT_PLAN_CODE:COMMERCE}
+    default-currency: ${KSM_KERNEL_DEFAULT_CURRENCY:XAF}
+    legacy-migration:
+      enabled: ${KSM_KERNEL_LEGACY_MIGRATION_ENABLED:false}
+    kafka:
+      enabled: ${KSM_KERNEL_KAFKA_ENABLED:false}
+      bootstrap-servers: ${KSM_KERNEL_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      topic: ${KSM_KERNEL_KAFKA_TOPIC:iwm.events.business}
+      group-id: ${KSM_KERNEL_KAFKA_GROUP_ID:yowpainter-backend}
 
 # Custom App Properties
 app:

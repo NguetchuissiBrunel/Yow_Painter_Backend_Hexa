@@ -10,6 +10,7 @@ import com.yowpainter.modules.artwork.infrastructure.adapter.in.web.dto.*;
 import com.yowpainter.modules.auth.domain.model.AppUser;
 import com.yowpainter.modules.auth.domain.port.out.AppUserRepositoryPort;
 import com.yowpainter.modules.notification.application.service.NotificationService;
+import com.yowpainter.shared.kernel.port.KernelFilePort;
 import com.yowpainter.modules.shop.domain.port.out.ProductRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Optional;
@@ -40,7 +40,7 @@ public class ArtworkServiceTest {
     @Mock private ArtworkCommentRepositoryPort commentRepository;
     @Mock private ProductRepositoryPort productRepository;
     @Mock private NotificationService notificationService;
-    @Mock private PlatformTransactionManager transactionManager;
+    @Mock private KernelFilePort kernelFilePort;
 
     @InjectMocks
     private ArtworkService artworkService;
