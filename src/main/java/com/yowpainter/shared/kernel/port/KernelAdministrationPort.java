@@ -5,11 +5,13 @@ import java.util.UUID;
 
 public interface KernelAdministrationPort {
 
-    void provisionDefaultRoles();
+    List<AdministrativeRoleView> provisionDefaultRoles();
 
     List<AdministrativeRoleView> listRoles();
 
     void assignTenantAdminRole(UUID userId, UUID roleId);
+
+    void grantOrganizationWriteAccess(UUID userId);
 
     record AdministrativeRoleView(UUID id, String code, String name) {
     }

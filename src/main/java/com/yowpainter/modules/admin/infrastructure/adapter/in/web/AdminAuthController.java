@@ -5,6 +5,7 @@ import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.AuthRespons
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.LoginRequest;
 import com.yowpainter.modules.auth.application.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/admin/auth")
 @RequiredArgsConstructor
+@SecurityRequirements
 @Tag(name = "Admin Authentication", description = "Endpoints d'authentification réservés aux Administrateurs")
 public class AdminAuthController {
 

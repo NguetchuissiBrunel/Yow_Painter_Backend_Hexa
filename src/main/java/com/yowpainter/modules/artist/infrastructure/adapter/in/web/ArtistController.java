@@ -4,13 +4,14 @@ import com.yowpainter.modules.artist.infrastructure.adapter.in.web.dto.ArtistAna
 import com.yowpainter.modules.artist.infrastructure.adapter.in.web.dto.ArtistResponse;
 import com.yowpainter.modules.artist.infrastructure.adapter.in.web.dto.ArtistUpdateRequest;
 import com.yowpainter.modules.artist.application.service.ArtistService;
+import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class ArtistController {
 
     private final ArtistService artistService;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @GetMapping("/public/artists/{slug}")
     @Operation(summary = "Recuperer le profil public d'un artiste par son slug")
@@ -37,23 +39,31 @@ public class ArtistController {
     }
 
     @GetMapping("/artist/me")
+    @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Recuperer mon propre profil (Artiste connecte)")
-    public ResponseEntity<ArtistResponse> getMyProfile(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(artistService.getArtistByEmail(userDetails.getUsername()));
+    public ResponseEntity<ArtistResponse> getMyProfile(Authentication authentication) {
+        return ResponseEntity.ok(artistService.toResponse(authenticatedUserResolver.requireArtist(authentication)));
     }
 
     @PutMapping("/artist/me")
+    @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Mettre a jour mon profil artiste")
     public ResponseEntity<ArtistResponse> updateMyProfile(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @Valid @RequestBody ArtistUpdateRequest request) {
-        return ResponseEntity.ok(artistService.updateArtist(userDetails.getUsername(), request));
+        return ResponseEntity.ok(artistService.updateArtist(
+                authenticatedUserResolver.requireEmail(authentication),
+                request
+        ));
     }
 
     @GetMapping("/artist/me/analytics")
+    @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Recuperer les statistiques de mon dashboard")
-    public ResponseEntity<ArtistAnalyticsResponse> getMyAnalytics(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(artistService.getArtistAnalytics(userDetails.getUsername()));
+    public ResponseEntity<ArtistAnalyticsResponse> getMyAnalytics(Authentication authentication) {
+        return ResponseEntity.ok(artistService.getArtistAnalytics(
+                authenticatedUserResolver.requireEmail(authentication)
+        ));
     }
 
     @GetMapping("/public/artists/id/{id}")

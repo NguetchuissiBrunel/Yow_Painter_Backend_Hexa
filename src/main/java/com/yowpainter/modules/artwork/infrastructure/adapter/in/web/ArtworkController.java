@@ -8,14 +8,14 @@ import com.yowpainter.modules.artwork.domain.model.ArtworkStatus;
 import com.yowpainter.modules.artwork.domain.model.ArtworkStyle;
 import com.yowpainter.modules.artwork.domain.model.ArtworkTechnique;
 import com.yowpainter.modules.artwork.application.service.ArtworkService;
+import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -32,6 +32,7 @@ import java.util.UUID;
 public class ArtworkController {
 
     private final ArtworkService artworkService;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @GetMapping("/v1/public/{artistSlug}/artworks")
     @PreAuthorize("permitAll()")
@@ -58,27 +59,35 @@ public class ArtworkController {
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Uploader une image d'oeuvre via le kernel (mode kernel uniquement)")
     public ResponseEntity<ArtworkImageUploadResponse> uploadArtworkImage(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @RequestParam("file") MultipartFile file) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(artworkService.uploadArtworkImage(userDetails.getUsername(), file));
+                .body(artworkService.uploadArtworkImage(
+                        authenticatedUserResolver.requireEmail(authentication),
+                        file
+                ));
     }
 
     @PostMapping("/artworks")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Créer une oeuvre (Artiste)")
     public ResponseEntity<ArtworkResponse> createArtwork(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @Valid @RequestBody ArtworkCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(artworkService.createArtwork(userDetails.getUsername(), request));
+                .body(artworkService.createArtwork(
+                        authenticatedUserResolver.requireEmail(authentication),
+                        request
+                ));
     }
 
     @GetMapping("/artworks/me")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Lister mes oeuvres (Artiste - Dashboard)")
-    public ResponseEntity<List<ArtworkResponse>> getMyArtworks(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(artworkService.getMyArtworks(userDetails.getUsername()));
+    public ResponseEntity<List<ArtworkResponse>> getMyArtworks(Authentication authentication) {
+        return ResponseEntity.ok(artworkService.getMyArtworks(
+                authenticatedUserResolver.requireEmail(authentication)
+        ));
     }
 
     @GetMapping("/public/artworks/latest")
@@ -100,9 +109,9 @@ public class ArtworkController {
     @Operation(summary = "Liker ou unliker une oeuvre dans une boutique spécifique")
     public ResponseEntity<Void> toggleLike(
             @PathVariable String artistSlug,
-            @PathVariable UUID id, 
-            @AuthenticationPrincipal UserDetails userDetails) {
-        artworkService.toggleLike(id, userDetails.getUsername());
+            @PathVariable UUID id,
+            Authentication authentication) {
+        artworkService.toggleLike(id, authenticatedUserResolver.requireEmail(authentication));
         return ResponseEntity.ok().build();
     }
 
@@ -112,9 +121,13 @@ public class ArtworkController {
     public ResponseEntity<CommentResponse> addComment(
             @PathVariable String artistSlug,
             @PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @RequestBody CommentRequest request) {
-        return ResponseEntity.ok(artworkService.addComment(id, userDetails.getUsername(), request));
+        return ResponseEntity.ok(artworkService.addComment(
+                id,
+                authenticatedUserResolver.requireEmail(authentication),
+                request
+        ));
     }
 
     @GetMapping("/v1/public/{artistSlug}/artworks/{id}/comments")
@@ -131,9 +144,13 @@ public class ArtworkController {
     @Operation(summary = "Modifier une oeuvre (Artiste proprietaire)")
     public ResponseEntity<ArtworkResponse> updateArtwork(
             @PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @Valid @RequestBody ArtworkCreateRequest request) {
-        return ResponseEntity.ok(artworkService.updateArtwork(id, userDetails.getUsername(), request));
+        return ResponseEntity.ok(artworkService.updateArtwork(
+                id,
+                authenticatedUserResolver.requireEmail(authentication),
+                request
+        ));
     }
 
     @PatchMapping("/artworks/{id}/status")
@@ -141,25 +158,28 @@ public class ArtworkController {
     @Operation(summary = "Changer l'etat d'une oeuvre (PUBLISHED, ON_SALE, ARCHIVED...)")
     public ResponseEntity<Void> updateStatus(
             @PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @RequestParam ArtworkStatus status) {
-        artworkService.updateStatus(id, userDetails.getUsername(), status);
+        artworkService.updateStatus(id, authenticatedUserResolver.requireEmail(authentication), status);
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/artworks/bulk-delete")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Suppression groupée d'oeuvres")
-    public ResponseEntity<Void> bulkDelete(@RequestBody List<UUID> ids, @AuthenticationPrincipal UserDetails userDetails) {
-        artworkService.bulkDeleteArtworks(ids, userDetails.getUsername());
+    public ResponseEntity<Void> bulkDelete(@RequestBody List<UUID> ids, Authentication authentication) {
+        artworkService.bulkDeleteArtworks(ids, authenticatedUserResolver.requireEmail(authentication));
         return ResponseEntity.ok().build();
     }
 
     @PatchMapping("/artworks/bulk-status")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Mise à jour groupée du statut")
-    public ResponseEntity<Void> bulkUpdateStatus(@RequestBody List<UUID> ids, @RequestParam ArtworkStatus status, @AuthenticationPrincipal UserDetails userDetails) {
-        artworkService.bulkUpdateStatus(ids, userDetails.getUsername(), status);
+    public ResponseEntity<Void> bulkUpdateStatus(
+            @RequestBody List<UUID> ids,
+            @RequestParam ArtworkStatus status,
+            Authentication authentication) {
+        artworkService.bulkUpdateStatus(ids, authenticatedUserResolver.requireEmail(authentication), status);
         return ResponseEntity.ok().build();
     }
 

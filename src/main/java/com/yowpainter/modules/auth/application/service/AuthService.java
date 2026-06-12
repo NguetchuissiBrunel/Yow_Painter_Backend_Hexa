@@ -80,13 +80,14 @@ public class AuthService {
         return registerBuyerViaKernel(request);
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         try {
             KernelAuthPort.KernelLoginResult loginResult = kernelAuthPort.login(
                     request.getEmail(),
                     request.getPassword()
             );
-            Artist artist = resolveArtistProfile(loginResult);
+            Artist artist = syncLocalKernelLink(loginResult);
             return KernelAuthMapper.toAuthResponse(loginResult, artist);
         } catch (KernelClientException ex) {
             throw new IllegalArgumentException(
@@ -95,9 +96,10 @@ public class AuthService {
         }
     }
 
+    @Transactional
     public AuthResponse refreshToken(String requestToken) {
         KernelAuthPort.KernelLoginResult refreshed = kernelAuthPort.refresh(requestToken);
-        Artist artist = resolveArtistProfile(refreshed);
+        Artist artist = syncLocalKernelLink(refreshed);
         return KernelAuthMapper.toAuthResponse(refreshed, artist);
     }
 
@@ -116,13 +118,20 @@ public class AuthService {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalArgumentException("Un utilisateur avec cet email existe deja");
         }
-        KernelAuthPort.KernelLoginResult signup = kernelAuthPort.signUp(new KernelAuthPort.SignUpCommand(
-                request.getFirstName(),
-                request.getLastName(),
-                request.getEmail(),
-                request.getPassword(),
-                "PROSPECT"
-        ));
+        KernelAuthPort.KernelLoginResult signup;
+        try {
+            signup = kernelAuthPort.signUp(new KernelAuthPort.SignUpCommand(
+                    request.getFirstName(),
+                    request.getLastName(),
+                    request.getEmail(),
+                    request.getPassword(),
+                    "PROSPECT"
+            ));
+        } catch (KernelClientException ex) {
+            throw new IllegalArgumentException(
+                    ex.getMessage() != null ? ex.getMessage() : "Echec inscription via le kernel"
+            );
+        }
         AppUser buyer = AppUser.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -135,16 +144,43 @@ public class AuthService {
         return KernelAuthMapper.toAuthResponse(signup, null);
     }
 
-    private Artist resolveArtistProfile(KernelAuthPort.KernelLoginResult loginResult) {
+    private Artist syncLocalKernelLink(KernelAuthPort.KernelLoginResult loginResult) {
         if (loginResult.userId() != null) {
             Optional<Artist> byKernelUser = artistRepository.findByKernelUserId(loginResult.userId());
             if (byKernelUser.isPresent()) {
                 return byKernelUser.get();
             }
+            userRepository.findByKernelUserId(loginResult.userId()).ifPresent(user -> {});
         }
-        if (loginResult.email() != null) {
-            return artistRepository.findByEmail(loginResult.email()).orElse(null);
+        if (loginResult.email() == null) {
+            return null;
         }
+
+        Optional<Artist> artist = artistRepository.findByEmail(loginResult.email())
+                .map(found -> {
+                    linkKernelUserId(found, loginResult.userId());
+                    return found;
+                });
+        if (artist.isPresent()) {
+            return artist.get();
+        }
+
+        userRepository.findByEmail(loginResult.email())
+                .ifPresent(user -> linkKernelUserId(user, loginResult.userId()));
         return null;
+    }
+
+    private AppUser linkKernelUserId(AppUser user, UUID kernelUserId) {
+        if (kernelUserId == null) {
+            return user;
+        }
+        if (user.getKernelUserId() != null && kernelUserId.equals(user.getKernelUserId())) {
+            return user;
+        }
+        user.setKernelUserId(kernelUserId);
+        if (user instanceof Artist artist) {
+            return artistRepository.save(artist);
+        }
+        return userRepository.save(user);
     }
 }

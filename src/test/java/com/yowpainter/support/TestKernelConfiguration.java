@@ -1,6 +1,7 @@
 package com.yowpainter.support;
 
 import com.yowpainter.modules.auth.application.port.out.KernelAuthPort;
+import com.yowpainter.shared.kernel.KernelBootstrapAdminSession;
 import com.yowpainter.shared.kernel.port.KernelAdministrationPort;
 import com.yowpainter.shared.kernel.port.KernelFilePort;
 import com.yowpainter.shared.kernel.port.KernelNotificationPort;
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -60,7 +62,8 @@ public class TestKernelConfiguration {
             @Override
             public KernelUserProfile me(String accessToken) {
                 String email = accessToken.replace("test-token-", "");
-                return new KernelUserProfile(UUID.randomUUID(), UUID.randomUUID(), email, email, List.of());
+                UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(StandardCharsets.UTF_8));
+                return new KernelUserProfile(userId, UUID.randomUUID(), email, email, List.of());
             }
 
             @Override
@@ -94,8 +97,9 @@ public class TestKernelConfiguration {
             }
 
             private KernelLoginResult buildLoginResult(String email) {
+                UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(StandardCharsets.UTF_8));
                 return new KernelLoginResult(
-                        UUID.randomUUID(),
+                        userId,
                         UUID.fromString("11111111-1111-1111-1111-111111111111"),
                         UUID.randomUUID(),
                         email,
@@ -107,6 +111,21 @@ public class TestKernelConfiguration {
                         Set.of("ROLE_ARTIST"),
                         List.of()
                 );
+            }
+        };
+    }
+
+    @Bean
+    @Primary
+    KernelBootstrapAdminSession testKernelBootstrapAdminSession() {
+        return new KernelBootstrapAdminSession(null, null, null) {
+            @Override
+            public String requireAccessToken() {
+                return "test-bootstrap-admin-token";
+            }
+
+            @Override
+            public void invalidate() {
             }
         };
     }
@@ -209,16 +228,21 @@ public class TestKernelConfiguration {
         UUID tenantAdminRoleId = UUID.fromString("22222222-2222-2222-2222-222222222222");
         return new KernelAdministrationPort() {
             @Override
-            public void provisionDefaultRoles() {
+            public List<AdministrativeRoleView> provisionDefaultRoles() {
+                return List.of(new AdministrativeRoleView(tenantAdminRoleId, "GENERAL_ADMIN", "General Administrator"));
             }
 
             @Override
             public List<AdministrativeRoleView> listRoles() {
-                return List.of(new AdministrativeRoleView(tenantAdminRoleId, "TENANT_ADMIN", "Tenant Admin"));
+                return List.of(new AdministrativeRoleView(tenantAdminRoleId, "GENERAL_ADMIN", "General Administrator"));
             }
 
             @Override
             public void assignTenantAdminRole(UUID userId, UUID roleId) {
+            }
+
+            @Override
+            public void grantOrganizationWriteAccess(UUID userId) {
             }
         };
     }

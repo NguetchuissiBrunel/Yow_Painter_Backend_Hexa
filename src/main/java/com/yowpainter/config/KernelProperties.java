@@ -10,7 +10,9 @@ public record KernelProperties(
         String tenantId,
         String jwkSetUri,
         String defaultPlanCode,
-        String defaultCurrency
+        String defaultCurrency,
+        String bootstrapAdminUsername,
+        String bootstrapAdminPassword
 ) {
     public String resolvedJwkSetUri() {
         if (jwkSetUri != null && !jwkSetUri.isBlank()) {

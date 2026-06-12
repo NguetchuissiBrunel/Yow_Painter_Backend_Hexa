@@ -1,5 +1,6 @@
 package com.yowpainter.shared.kernel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yowpainter.config.KernelProperties;
@@ -9,12 +10,15 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.http.HttpEntity;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.RestClient;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -103,18 +107,19 @@ public class KernelHttpClient {
             Class<T> responseType,
             UUID organizationId
     ) {
-        MultipartBodyBuilder builder = new MultipartBodyBuilder();
         MediaType resolvedContentType = contentType == null || contentType.isBlank()
                 ? MediaType.APPLICATION_OCTET_STREAM
                 : MediaType.parseMediaType(contentType);
-        builder.part("file", new ByteArrayResource(content) {
+        ByteArrayResource fileResource = new ByteArrayResource(content) {
             @Override
             public String getFilename() {
                 return fileName;
             }
-        }).contentType(resolvedContentType);
-
-        MultiValueMap<String, HttpEntity<?>> multipartData = builder.build();
+        };
+        HttpHeaders fileHeaders = new HttpHeaders();
+        fileHeaders.setContentType(resolvedContentType);
+        MultiValueMap<String, Object> multipartData = new LinkedMultiValueMap<>();
+        multipartData.add("file", new HttpEntity<>(fileResource, fileHeaders));
         String uri = documentType == null || documentType.isBlank()
                 ? path
                 : path + "?documentType=" + documentType;
@@ -127,11 +132,7 @@ public class KernelHttpClient {
 
         ResponseEntity<String> response = spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
-                    throw new KernelClientException(
-                            "Kernel multipart call failed on " + path,
-                            clientResponse.getStatusCode(),
-                            null
-                    );
+                    throw toKernelException(path, clientResponse);
                 })
                 .toEntity(String.class);
 
@@ -147,17 +148,17 @@ public class KernelHttpClient {
 
         spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
-                    throw new KernelClientException(
-                            "Kernel call failed on " + path,
-                            clientResponse.getStatusCode(),
-                            null
-                    );
+                    throw toKernelException(path, clientResponse);
                 })
                 .toBodilessEntity();
     }
 
     public <T> List<T> postList(String path, Object body, Class<T> elementType, UUID organizationId) {
         return parseListResponse(exchangeRaw("POST", path, body, organizationId), elementType);
+    }
+
+    public <T> List<T> postList(String path, Object body, Class<T> elementType, UUID organizationId, String accessToken) {
+        return withAccessToken(accessToken, () -> postList(path, body, elementType, organizationId));
     }
 
     public <T> List<T> getRawList(String path, Class<T> elementType, UUID organizationId, String accessToken) {
@@ -195,11 +196,7 @@ public class KernelHttpClient {
 
         ResponseEntity<String> response = spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
-                    throw new KernelClientException(
-                            "Kernel call failed on " + path,
-                            clientResponse.getStatusCode(),
-                            null
-                    );
+                    throw toKernelException(path, clientResponse);
                 })
                 .toEntity(String.class);
         return response.getBody();
@@ -266,11 +263,7 @@ public class KernelHttpClient {
 
         spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
-                    throw new KernelClientException(
-                            "Kernel call failed on " + path,
-                            clientResponse.getStatusCode(),
-                            null
-                    );
+                    throw toKernelException(path, clientResponse);
                 })
                 .toBodilessEntity();
     }
@@ -286,15 +279,60 @@ public class KernelHttpClient {
 
         ResponseEntity<String> response = spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
-                    throw new KernelClientException(
-                            "Kernel call failed on " + path,
-                            clientResponse.getStatusCode(),
-                            null
-                    );
+                    throw toKernelException(path, clientResponse);
                 })
                 .toEntity(String.class);
 
         return parseResponse(response.getBody(), responseType);
+    }
+
+    private KernelClientException toKernelException(String path, ClientHttpResponse response) {
+        try {
+            org.springframework.http.HttpStatusCode statusCode = response.getStatusCode();
+            String body = response.getBody() != null
+                    ? new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8)
+                    : "";
+
+            String message = "Kernel call failed on " + path;
+            String errorCode = null;
+            if (!body.isBlank()) {
+                try {
+                    KernelApiResponse<?> parsed = objectMapper.readValue(body, KernelApiResponse.class);
+                    if (parsed.message() != null && !parsed.message().isBlank()) {
+                        message = parsed.message();
+                    }
+                    errorCode = parsed.errorCode();
+                } catch (Exception ex) {
+                    message = extractFallbackKernelMessage(path, body, message);
+                }
+                if (message.equals("Kernel call failed on " + path)) {
+                    message = extractFallbackKernelMessage(path, body, message);
+                }
+            }
+            return new KernelClientException(message, statusCode, errorCode);
+        } catch (IOException ex) {
+            return new KernelClientException("Kernel call failed on " + path, null, null);
+        }
+    }
+
+    private String extractFallbackKernelMessage(String path, String body, String defaultMessage) {
+        try {
+            JsonNode node = objectMapper.readTree(body);
+            if (node.hasNonNull("message") && !node.get("message").asText().isBlank()) {
+                return node.get("message").asText();
+            }
+            if (node.hasNonNull("error") && !node.get("error").asText().isBlank()) {
+                String error = node.get("error").asText();
+                if (node.has("status") && node.get("status").asInt() >= 500) {
+                    return "Erreur interne kernel sur " + path + " : " + error
+                            + ". Verifiez les logs kernel (PostgreSQL/Redis demarres, profil r2dbc).";
+                }
+                return error;
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        return defaultMessage + ": " + body;
     }
 
     private void applyServerHeaders(HttpHeaders headers, UUID organizationId) {

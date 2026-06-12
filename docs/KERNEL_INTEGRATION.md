@@ -2,6 +2,8 @@
 
 Ce document décrit l'activation du backend YowPainter en **mode consommateur hexagonal** du kernel RT-Comops.
 
+> **Guide configuration pas à pas** (kernel + `.env.local` + bootstrap + dépannage) : [CONFIGURATION_KERNEL_YOWPAINTER.md](./CONFIGURATION_KERNEL_YOWPAINTER.md)
+
 ## Prérequis kernel
 
 1. Déployer le kernel RT-Comops (`D:\KSM_Kernel_Layer` ou stack Docker).
@@ -42,7 +44,7 @@ Le backend YowPainter est **toujours** un consommateur du kernel (auth, org, com
 - `POST /api/auth/reset-password` → kernel `/api/auth/reset-password` (token kernel)
 - Inscription artiste → sign-up kernel + création org + plan commercial + profil `Artist` local
 - Inscription acheteur → sign-up kernel `PROSPECT` + `AppUser` local
-- Inscription admin (`POST /api/admin/auth/register`) → sign-up kernel + rôle `TENANT_ADMIN` via `/api/administration/*` (clé API client admin requise)
+- Inscription admin (`POST /api/admin/auth/register`) → sign-up kernel + rôle `GENERAL_ADMIN` (provisionné via `POST /api/administration/roles/defaults`) + assignation via `/api/administration/users/{id}/roles` (session bootstrap `platform-admin` requise)
 
 ### Commerce
 - Produits/commandes délégués au kernel (`KernelCommerceService`)
@@ -77,6 +79,49 @@ Pour backfiller `organization_id` sur artworks/produits/commandes existants :
 3. Désactiver ensuite la variable.
 
 > Les anciennes données multi-schémas nécessitent une migration manuelle ou une réinscription des artistes via le kernel.
+
+## Dépannage inscription (`POST /api/auth/register` → 500)
+
+Cause la plus fréquente en local : la `ClientApplication` `yowpainter-backend` n'existe pas encore dans le kernel, ou le secret ne correspond pas.
+
+1. Vérifier les logs backend : `Kernel call failed on /api/auth/sign-up` avec message kernel (401 = credentials invalides).
+2. **Dev rapide** : dans `.env.local`, utiliser le client bootstrap kernel :
+   ```bash
+   KSM_KERNEL_CLIENT_ID=dev-platform-backend
+   KSM_KERNEL_API_KEY=dev-api-key
+   ```
+3. **Client dédié** : exécuter `.\scripts\bootstrap-kernel-client.ps1` (nécessite MFA activé sur `platform-admin` dans le kernel).
+4. Redémarrer le backend après modification de `.env.local`.
+
+## Dev local (kernel sur 8080, backend sur 8090)
+
+1. Démarrer le kernel RT-Comops en local (`http://localhost:8080`).
+2. Créer la `ClientApplication` `yowpainter-backend` dans le kernel :
+   ```powershell
+   .\scripts\bootstrap-kernel-client.ps1
+   ```
+   (ou manuellement via `D:\KSM_Kernel_Layer\docs\external-backend-integration.md`)
+3. Copier `.env.example` → `.env.local` et vérifier que `KSM_KERNEL_API_KEY` correspond au secret de la ClientApplication.
+4. Lancer :
+
+```powershell
+.\scripts\run-local.ps1
+```
+
+Variables typiques :
+
+```bash
+KSM_KERNEL_BASE_URL=http://localhost:8080
+KSM_KERNEL_CLIENT_ID=yowpainter-backend
+KSM_KERNEL_API_KEY=yowpainter-local-dev-secret-2026
+KSM_KERNEL_TENANT_ID=11111111-1111-1111-1111-111111111111
+KSM_KERNEL_JWK_SET_URI=http://localhost:8080/.well-known/jwks.json
+PORT=8090
+```
+
+- **Kernel** : `http://localhost:8080`
+- **YowPainter** : `http://localhost:8090` (Swagger : `/swagger-ui.html`)
+- **Frontend** : `NEXT_PUBLIC_API_URL=http://localhost:8090`
 
 ## Tests locaux
 

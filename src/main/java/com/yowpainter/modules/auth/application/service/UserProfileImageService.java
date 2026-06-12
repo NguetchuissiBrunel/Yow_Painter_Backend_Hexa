@@ -4,7 +4,7 @@ import com.yowpainter.modules.artist.domain.model.Artist;
 import com.yowpainter.modules.auth.domain.model.AppUser;
 import com.yowpainter.modules.auth.domain.port.out.AppUserRepositoryPort;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.ProfileImageUploadResponse;
-import com.yowpainter.shared.context.RequestContext;
+import com.yowpainter.shared.kernel.KernelClientException;
 import com.yowpainter.shared.kernel.port.KernelFilePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,9 +21,10 @@ public class UserProfileImageService {
     private final KernelFilePort kernelFilePort;
 
     @Transactional
-    public ProfileImageUploadResponse uploadProfilePicture(String userEmail, MultipartFile file) {
-        AppUser user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Utilisateur introuvable"));
+    public ProfileImageUploadResponse uploadProfilePicture(AppUser user, MultipartFile file, String accessToken) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Fichier image requis");
+        }
 
         UUID organizationId = null;
         if (user instanceof Artist artist) {
@@ -31,15 +32,19 @@ public class UserProfileImageService {
         }
 
         try {
+            String fileName = file.getOriginalFilename();
+            if (fileName == null || fileName.isBlank()) {
+                fileName = "profile-picture.jpg";
+            }
             KernelFilePort.FileView uploaded = kernelFilePort.upload(
                     new KernelFilePort.UploadFileCommand(
                             organizationId,
                             file.getBytes(),
-                            file.getOriginalFilename(),
+                            fileName,
                             file.getContentType(),
                             "PROFILE_PICTURE"
                     ),
-                    RequestContext.accessToken()
+                    accessToken
             );
             user.setProfilePictureUrl(uploaded.downloadUrl());
             userRepository.save(user);
@@ -47,6 +52,11 @@ public class UserProfileImageService {
                     .fileId(uploaded.id())
                     .imageUrl(uploaded.downloadUrl())
                     .build();
+        } catch (KernelClientException ex) {
+            throw new IllegalStateException(
+                    ex.getMessage() != null ? ex.getMessage() : "Echec upload photo de profil via le kernel",
+                    ex
+            );
         } catch (java.io.IOException ex) {
             throw new IllegalStateException("Impossible de lire le fichier image", ex);
         }

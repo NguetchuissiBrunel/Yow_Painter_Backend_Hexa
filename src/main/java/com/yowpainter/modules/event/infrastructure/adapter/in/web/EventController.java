@@ -1,12 +1,13 @@
 package com.yowpainter.modules.event.infrastructure.adapter.in.web;
 
+import com.yowpainter.modules.artist.domain.port.out.ArtistRepositoryPort;
+import com.yowpainter.modules.event.application.service.EventService;
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.EventCreateRequest;
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.EventResponse;
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.ReservationResponse;
 import com.yowpainter.modules.event.infrastructure.adapter.in.web.dto.TicketResponse;
-import com.yowpainter.modules.artist.domain.port.out.ArtistRepositoryPort;
-import com.yowpainter.modules.event.application.service.EventService;
 import com.yowpainter.modules.payment.application.service.PaymentService;
+import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -14,9 +15,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
@@ -31,6 +39,7 @@ public class EventController {
     private final EventService eventService;
     private final PaymentService paymentService;
     private final ArtistRepositoryPort artistRepository;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @GetMapping("/public/events")
     @PreAuthorize("permitAll()")
@@ -71,17 +80,19 @@ public class EventController {
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Creer un evenement (Artiste)")
     public ResponseEntity<EventResponse> createEvent(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @Valid @RequestBody EventCreateRequest request) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(eventService.createEvent(userDetails.getUsername(), request));
+                .body(eventService.createEvent(email, request));
     }
 
     @GetMapping("/events/me")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Lister mes événements (Artiste - Dashboard)")
-    public ResponseEntity<List<EventResponse>> getMyEvents(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(eventService.getMyEvents(userDetails.getUsername()));
+    public ResponseEntity<List<EventResponse>> getMyEvents(Authentication authentication) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        return ResponseEntity.ok(eventService.getMyEvents(email));
     }
 
     @PutMapping("/events/{id}")
@@ -89,16 +100,18 @@ public class EventController {
     @Operation(summary = "Modifier un evenement (Artiste proprietaire)")
     public ResponseEntity<EventResponse> updateEvent(
             @PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @Valid @RequestBody EventCreateRequest request) {
-        return ResponseEntity.ok(eventService.updateEvent(id, userDetails.getUsername(), request));
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        return ResponseEntity.ok(eventService.updateEvent(id, email, request));
     }
 
     @DeleteMapping("/events/{id}")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Annuler/Supprimer un evenement")
-    public ResponseEntity<Void> cancelEvent(@PathVariable UUID id, @AuthenticationPrincipal UserDetails userDetails) {
-        eventService.cancelEvent(id, userDetails.getUsername());
+    public ResponseEntity<Void> cancelEvent(@PathVariable UUID id, Authentication authentication) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        eventService.cancelEvent(id, email);
         return ResponseEntity.ok().build();
     }
 
@@ -106,9 +119,10 @@ public class EventController {
     @PreAuthorize("hasAnyRole('BUYER', 'ARTIST')")
     @Operation(summary = "RESERVER une place")
     public ResponseEntity<ReservationResponse> reserveEvent(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @PathVariable UUID eventId) {
-        return ResponseEntity.ok(eventService.reserveEvent(eventId, userDetails.getUsername()));
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        return ResponseEntity.ok(eventService.reserveEvent(eventId, email));
     }
 
     @PostMapping("/events/reservations/{id}/checkout")
@@ -117,28 +131,29 @@ public class EventController {
     public ResponseEntity<Map<String, String>> checkoutReservation(
             @PathVariable UUID id,
             @RequestParam String phoneNumber,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        
+            Authentication authentication) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
+
         ReservationResponse reservation = eventService.getReservationById(id);
         EventResponse event = eventService.getEventById(reservation.getEventId());
-        
+
         if (event.getTicketPrice().compareTo(java.math.BigDecimal.ZERO) == 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "Cet événement est gratuit"));
         }
-        
+
         String tenantId = artistRepository.findById(event.getArtistId())
                 .orElseThrow(() -> new IllegalArgumentException("Artiste non trouve"))
                 .getSlug();
-        
+
         String paymentReference = paymentService.initiateMobileMoneyPayment(
-                id, 
-                "RESERVATION", 
-                event.getTicketPrice(), 
-                tenantId, 
-                userDetails.getUsername(),
+                id,
+                "RESERVATION",
+                event.getTicketPrice(),
+                tenantId,
+                email,
                 phoneNumber
         );
-        
+
         return ResponseEntity.ok(Map.of("paymentReference", paymentReference));
     }
 
@@ -147,8 +162,9 @@ public class EventController {
     @Operation(summary = "Lister les inscrits (Artiste proprietaire)")
     public ResponseEntity<List<ReservationResponse>> getReservations(
             @PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(eventService.getEventReservations(id, userDetails.getUsername()));
+            Authentication authentication) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        return ResponseEntity.ok(eventService.getEventReservations(id, email));
     }
 
     @PostMapping("/events/tickets/validate")

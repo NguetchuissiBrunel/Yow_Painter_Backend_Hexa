@@ -41,9 +41,6 @@ public class Artist extends AppUser {
     @Column(name = "tenant_id")
     private UUID tenantId;
 
-    @Column(name = "kernel_user_id")
-    private UUID kernelUserId;
-
     @Column(name = "organization_id")
     private UUID organizationId;
 

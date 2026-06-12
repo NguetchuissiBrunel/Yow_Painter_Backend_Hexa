@@ -54,9 +54,13 @@ public class KernelCommerceService {
         String accessToken = requireAccessToken();
         Artwork artwork = null;
         if (request.getArtworkId() != null) {
-            artwork = artworkRepository.findById(request.getArtworkId()).orElseThrow();
+            artwork = artworkRepository.findById(request.getArtworkId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Oeuvre introuvable pour artworkId=" + request.getArtworkId()
+                                    + ". Creez d'abord une oeuvre via POST /api/artworks ou retirez artworkId."
+                    ));
             if (!artwork.getArtistId().equals(artist.getId())) {
-                throw new IllegalStateException("Not authorized");
+                throw new IllegalArgumentException("Cette oeuvre n'appartient pas a votre profil artiste");
             }
             artwork.setStatus(com.yowpainter.modules.artwork.domain.model.ArtworkStatus.ON_SALE);
             artwork.setOrganizationId(artist.getOrganizationId());
@@ -108,8 +112,10 @@ public class KernelCommerceService {
 
     @Transactional
     public OrderResponse placeOrder(String buyerEmail, OrderCreateRequest request) {
-        AppUser buyer = appUserRepository.findByEmail(buyerEmail).orElseThrow();
-        Product product = productRepository.findById(request.getProductId()).orElseThrow();
+        AppUser buyer = appUserRepository.findByEmail(buyerEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Acheteur introuvable"));
+        Product product = productRepository.findById(request.getProductId())
+                .orElseThrow(() -> new IllegalArgumentException("Produit introuvable"));
         if (product.getKernelProductId() == null || product.getOrganizationId() == null) {
             throw new IllegalStateException("Produit non synchronise avec le kernel");
         }
@@ -151,7 +157,8 @@ public class KernelCommerceService {
     }
 
     public List<OrderResponse> getMySales(String artistEmail) {
-        Artist artist = artistRepository.findByEmail(artistEmail).orElseThrow();
+        Artist artist = artistRepository.findByEmail(artistEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Artiste introuvable"));
         return orderRepository.findByOrganizationIdOrderByCreatedAtDesc(artist.getOrganizationId()).stream()
                 .map(this::mapToOrderResponse)
                 .collect(Collectors.toList());
@@ -163,7 +170,8 @@ public class KernelCommerceService {
     }
 
     public List<ProductResponse> getInventory(String artistEmail) {
-        Artist artist = artistRepository.findByEmail(artistEmail).orElseThrow();
+        Artist artist = artistRepository.findByEmail(artistEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Artiste introuvable"));
         return productRepository.findByArtistId(artist.getId()).stream()
                 .map(this::mapToProductResponse)
                 .collect(Collectors.toList());

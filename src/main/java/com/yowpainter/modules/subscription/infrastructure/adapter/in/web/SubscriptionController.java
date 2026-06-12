@@ -1,16 +1,21 @@
 package com.yowpainter.modules.subscription.infrastructure.adapter.in.web;
 
+import com.yowpainter.modules.subscription.application.service.SubscriptionService;
 import com.yowpainter.modules.subscription.domain.model.Subscription;
 import com.yowpainter.modules.subscription.domain.model.SubscriptionPlan;
-import com.yowpainter.modules.subscription.application.service.SubscriptionService;
+import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
@@ -24,6 +29,7 @@ import java.util.stream.Collectors;
 public class SubscriptionController {
 
     private final SubscriptionService subscriptionService;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @GetMapping("/plans")
     @Operation(summary = "Lister les forfaits disponibles")
@@ -40,26 +46,29 @@ public class SubscriptionController {
     @GetMapping("/my-plan")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Consulter mon forfait actuel")
-    public ResponseEntity<Subscription> getMyPlan(@AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(subscriptionService.getSubscriptionForArtist(userDetails.getUsername()));
+    public ResponseEntity<Subscription> getMyPlan(Authentication authentication) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        return ResponseEntity.ok(subscriptionService.getSubscriptionForArtist(email));
     }
 
     @PostMapping("/upgrade/checkout")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Initier le paiement Mobile Money pour un forfait")
     public ResponseEntity<Map<String, String>> checkoutUpgrade(
-            @AuthenticationPrincipal UserDetails userDetails, 
+            Authentication authentication,
             @RequestParam SubscriptionPlan plan,
             @RequestParam String phoneNumber) {
-        String paymentReference = subscriptionService.initiateSubscriptionUpgrade(userDetails.getUsername(), plan, phoneNumber);
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        String paymentReference = subscriptionService.initiateSubscriptionUpgrade(email, plan, phoneNumber);
         return ResponseEntity.ok(Map.of("paymentReference", paymentReference));
     }
 
     @DeleteMapping("/cancel")
     @PreAuthorize("hasRole('ARTIST')")
     @Operation(summary = "Resilier son abonnement")
-    public ResponseEntity<Void> cancelSubscription(@AuthenticationPrincipal UserDetails userDetails) {
-        subscriptionService.cancelSubscription(userDetails.getUsername());
+    public ResponseEntity<Void> cancelSubscription(Authentication authentication) {
+        String email = authenticatedUserResolver.requireEmail(authentication);
+        subscriptionService.cancelSubscription(email);
         return ResponseEntity.ok().build();
     }
 }

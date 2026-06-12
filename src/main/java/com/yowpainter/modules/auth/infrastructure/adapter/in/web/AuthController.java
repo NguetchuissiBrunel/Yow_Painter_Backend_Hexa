@@ -7,14 +7,15 @@ import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.LoginReques
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.RefreshTokenRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.RegisterRequest;
 import com.yowpainter.modules.auth.application.service.AuthService;
+import com.yowpainter.modules.auth.domain.model.AppUser;
+import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @GetMapping("/roles")
     @Operation(summary = "Lister les roles disponibles pour l'inscription")
@@ -76,14 +78,15 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(summary = "Se deconnecter")
     public ResponseEntity<Void> logout(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @RequestBody(required = false) RefreshTokenRequest body
     ) {
         if (body != null && body.getRefreshToken() != null) {
             authService.logoutWithRefreshToken(body.getRefreshToken());
         }
-        if (userDetails instanceof com.yowpainter.modules.auth.domain.model.AppUser) {
-            authService.logout((com.yowpainter.modules.auth.domain.model.AppUser) userDetails);
+        if (authentication != null && authentication.isAuthenticated()) {
+            AppUser user = authenticatedUserResolver.requireUser(authentication);
+            authService.logout(user);
         }
         return ResponseEntity.ok().build();
     }

@@ -1,5 +1,6 @@
 package com.yowpainter.modules.shop.infrastructure.adapter.in.web.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,7 +18,11 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ProductCreateRequest {
 
-    // Optionnel, on passe l'ID de l'oeuvre si on vend la toile certifiee
+    @Schema(
+            description = "Optionnel — ID d'une oeuvre existante (GET /api/artworks/me). Laissez null pour un produit sans oeuvre.",
+            nullable = true,
+            example = "null"
+    )
     private UUID artworkId;
 
     @NotBlank(message = "Le nom du produit est requis")

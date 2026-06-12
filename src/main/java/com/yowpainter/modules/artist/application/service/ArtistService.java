@@ -50,6 +50,10 @@ public class ArtistService {
         return mapToResponse(artist);
     }
 
+    public ArtistResponse toResponse(Artist artist) {
+        return mapToResponse(artist);
+    }
+
     @Transactional
     public ArtistResponse updateArtist(String email, ArtistUpdateRequest request) {
         Artist artist = artistRepository.findByEmail(email)

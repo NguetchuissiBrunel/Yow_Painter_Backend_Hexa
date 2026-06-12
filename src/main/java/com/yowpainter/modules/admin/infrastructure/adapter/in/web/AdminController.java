@@ -1,12 +1,12 @@
 package com.yowpainter.modules.admin.infrastructure.adapter.in.web;
 
+import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +21,7 @@ import java.util.UUID;
 public class AdminController {
 
     private final com.yowpainter.modules.admin.application.service.AdminService adminService;
+    private final AuthenticatedUserResolver authenticatedUserResolver;
 
     @GetMapping("/tenants")
     @Operation(summary = "Lister tous les artistes / tenants enregistres")
@@ -71,10 +72,11 @@ public class AdminController {
 
     @GetMapping("/me")
     @Operation(summary = "Récupérer le profil de l'administrateur connecté")
-    public ResponseEntity<Map<String, String>> getMe(@AuthenticationPrincipal UserDetails userDetails) {
+    public ResponseEntity<Map<String, String>> getMe(Authentication authentication) {
+        var user = authenticatedUserResolver.requireUser(authentication);
         return ResponseEntity.ok(Map.of(
-            "email", userDetails.getUsername(),
-            "role", "ROLE_ADMIN"
+            "email", user.getEmail(),
+            "role", user.getRole().name()
         ));
     }
 }

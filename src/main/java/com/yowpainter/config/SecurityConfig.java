@@ -13,12 +13,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import com.yowpainter.shared.security.KernelAuthorityMapper;
-import org.springframework.core.convert.converter.Converter;
-import org.springframework.security.authentication.AbstractAuthenticationToken;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import com.yowpainter.shared.security.KernelJwtAuthenticationConverter;
+import com.yowpainter.shared.security.PublicAwareBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -34,6 +30,8 @@ import java.util.List;
 public class SecurityConfig {
 
     private final KernelProperties kernelProperties;
+    private final KernelJwtAuthenticationConverter kernelJwtAuthenticationConverter;
+    private final PublicAwareBearerTokenResolver publicAwareBearerTokenResolver;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -44,6 +42,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/admin/auth/**",
                                 "/api/public/**",
                                 "/api/v1/public/**",
                                 "/api/shop/v1/public/**",
@@ -68,9 +67,10 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(publicAwareBearerTokenResolver)
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder())
-                                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                                .jwtAuthenticationConverter(kernelJwtAuthenticationConverter)
                         )
                 );
 
@@ -80,20 +80,6 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
         return NimbusJwtDecoder.withJwkSetUri(kernelProperties.resolvedJwkSetUri()).build();
-    }
-
-    @Bean
-    public Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            @SuppressWarnings("unchecked")
-            var rawAuthorities = (java.util.Collection<String>) jwt.getClaim("authorities");
-            java.util.Collection<GrantedAuthority> mapped = KernelAuthorityMapper.mapAuthorities(
-                    rawAuthorities == null ? java.util.List.of() : java.util.List.copyOf(rawAuthorities)
-            );
-            return mapped;
-        });
-        return converter;
     }
 
     @Bean

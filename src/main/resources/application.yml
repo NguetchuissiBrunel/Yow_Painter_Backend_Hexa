@@ -7,6 +7,11 @@ spring:
   application:
     name: yowpainter-api
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
   datasource:
     # Connexion à la base de données sur Render.com
     # Pour le dev local, si l'hôte interne ne marche pas, tu devras utiliser l'External Database URL
@@ -61,6 +66,8 @@ ksm:
     jwk-set-uri: ${KSM_KERNEL_JWK_SET_URI:}
     default-plan-code: ${KSM_KERNEL_DEFAULT_PLAN_CODE:COMMERCE}
     default-currency: ${KSM_KERNEL_DEFAULT_CURRENCY:XAF}
+    bootstrap-admin-username: ${KSM_KERNEL_BOOTSTRAP_ADMIN_USERNAME:}
+    bootstrap-admin-password: ${KSM_KERNEL_BOOTSTRAP_ADMIN_PASSWORD:}
     legacy-migration:
       enabled: ${KSM_KERNEL_LEGACY_MIGRATION_ENABLED:false}
     kafka:

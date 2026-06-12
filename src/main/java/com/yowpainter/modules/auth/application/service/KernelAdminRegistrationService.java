@@ -14,6 +14,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -22,7 +25,7 @@ import java.util.UUID;
 public class KernelAdminRegistrationService {
 
     private static final String KERNEL_MANAGED_PASSWORD = "{KERNEL_MANAGED}";
-    private static final String TENANT_ADMIN_ROLE_CODE = "TENANT_ADMIN";
+    private static final List<String> ADMIN_ROLE_CODES = List.of("GENERAL_ADMIN", "TENANT_ADMIN");
 
     private final KernelAuthPort kernelAuthPort;
     private final KernelAdministrationPort kernelAdministrationPort;
@@ -44,9 +47,8 @@ public class KernelAdminRegistrationService {
                     "PROSPECT"
             ));
 
-            provisionDefaultRolesQuietly();
-            UUID tenantAdminRoleId = resolveTenantAdminRoleId();
-            kernelAdministrationPort.assignTenantAdminRole(signup.userId(), tenantAdminRoleId);
+            UUID adminRoleId = resolveAdminRoleId();
+            kernelAdministrationPort.assignTenantAdminRole(signup.userId(), adminRoleId);
 
             KernelAuthPort.KernelLoginResult loginResult = kernelAuthPort.login(
                     request.getEmail(),
@@ -71,21 +73,32 @@ public class KernelAdminRegistrationService {
         }
     }
 
-    private void provisionDefaultRolesQuietly() {
+    private UUID resolveAdminRoleId() {
+        List<KernelAdministrationPort.AdministrativeRoleView> roles = new ArrayList<>();
         try {
-            kernelAdministrationPort.provisionDefaultRoles();
+            roles.addAll(kernelAdministrationPort.provisionDefaultRoles());
         } catch (Exception ex) {
-            log.debug("Provision des roles administratifs kernel ignoree: {}", ex.getMessage());
+            log.warn("Provision des roles administratifs kernel echouee: {}", ex.getMessage());
         }
+        if (roles.isEmpty()) {
+            roles.addAll(kernelAdministrationPort.listRoles());
+        }
+        return findAdminRoleId(roles).orElseThrow(() -> new IllegalStateException(
+                "Role administratif introuvable (GENERAL_ADMIN ou TENANT_ADMIN). "
+                        + "Verifiez KSM_KERNEL_BOOTSTRAP_ADMIN_USERNAME/PASSWORD et le compte platform-admin (MFA)."
+        ));
     }
 
-    private UUID resolveTenantAdminRoleId() {
-        return kernelAdministrationPort.listRoles().stream()
-                .filter(role -> TENANT_ADMIN_ROLE_CODE.equalsIgnoreCase(role.code()))
-                .map(KernelAdministrationPort.AdministrativeRoleView::id)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException(
-                        "Role TENANT_ADMIN introuvable sur le kernel. Verifiez la configuration client (X-Api-Key admin)."
-                ));
+    private Optional<UUID> findAdminRoleId(List<KernelAdministrationPort.AdministrativeRoleView> roles) {
+        for (String code : ADMIN_ROLE_CODES) {
+            Optional<UUID> roleId = roles.stream()
+                    .filter(role -> code.equalsIgnoreCase(role.code()))
+                    .map(KernelAdministrationPort.AdministrativeRoleView::id)
+                    .findFirst();
+            if (roleId.isPresent()) {
+                return roleId;
+            }
+        }
+        return Optional.empty();
     }
 }
