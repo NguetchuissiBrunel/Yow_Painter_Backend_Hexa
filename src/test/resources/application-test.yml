@@ -31,6 +31,8 @@ ksm:
     tenant-id: 11111111-1111-1111-1111-111111111111
     default-plan-code: COMMERCE
     default-currency: XAF
+    signup-platform-organization-code: yow-painter
+    auto-provision-artists: false
     kafka:
       enabled: false
 

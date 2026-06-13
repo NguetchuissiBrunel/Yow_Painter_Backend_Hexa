@@ -51,6 +51,9 @@ public class AuthServiceTest {
     private KernelArtistRegistrationService kernelArtistRegistrationService;
 
     @Mock
+    private KernelBuyerRegistrationService kernelBuyerRegistrationService;
+
+    @Mock
     private KernelAdminRegistrationService kernelAdminRegistrationService;
 
     @InjectMocks
@@ -142,7 +145,7 @@ public class AuthServiceTest {
     }
 
     @Test
-    void register_withBuyerRole_shouldSignUpViaKernel() {
+    void register_withBuyerRole_shouldDelegateToKernelBuyerRegistration() {
         RegisterRequest request = RegisterRequest.builder()
                 .firstName("Alice")
                 .lastName("Smith")
@@ -151,18 +154,17 @@ public class AuthServiceTest {
                 .role(UserRole.ROLE_BUYER)
                 .build();
 
-        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.empty());
-        when(passwordEncoder.encode("{KERNEL_MANAGED}")).thenReturn("hashed");
-        when(kernelAuthPort.signUp(any())).thenReturn(new KernelAuthPort.KernelLoginResult(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                "alice", "alice@example.com", "access", "refresh",
-                "Bearer", 3600, Set.of("ROLE_BUYER"), List.of()
-        ));
+        AuthResponse expected = AuthResponse.builder()
+                .email("alice@example.com")
+                .registrationStatus("PENDING_EMAIL")
+                .message("Inscription enregistree. Un e-mail de verification vous a ete envoye pour activer votre compte.")
+                .build();
+        when(kernelBuyerRegistrationService.registerBuyer(request)).thenReturn(expected);
 
         AuthResponse response = authService.register(request);
 
-        assertThat(response.getAccessToken()).isEqualTo("access");
-        verify(userRepository).save(any(AppUser.class));
+        assertThat(response).isEqualTo(expected);
+        verify(kernelBuyerRegistrationService).registerBuyer(request);
     }
 
     @Test
@@ -176,9 +178,11 @@ public class AuthServiceTest {
                 .thenReturn(new KernelAuthPort.KernelLoginResult(
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                         "john", "john.doe@example.com", "access", "refresh",
-                        "Bearer", 3600, Set.of("ROLE_ARTIST"), List.of()
+                        "Bearer", 3600, Set.of("ROLE_ARTIST"), List.of(),
+                        true, "COMPLETED", "ACTIVE"
                 ));
         when(artistRepository.findByKernelUserId(any())).thenReturn(Optional.of(artist));
+        when(artistRepository.save(any(Artist.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AuthResponse response = authService.login(request);
 
@@ -191,7 +195,8 @@ public class AuthServiceTest {
         when(kernelAuthPort.refresh("refresh-token"))
                 .thenReturn(new KernelAuthPort.KernelLoginResult(
                         null, null, null, null, null,
-                        "new-access", "refresh-token", "Bearer", 3600, null, List.of()
+                        "new-access", "refresh-token", "Bearer", 3600, null, List.of(),
+                        null, null, null
                 ));
 
         AuthResponse response = authService.refreshToken("refresh-token");

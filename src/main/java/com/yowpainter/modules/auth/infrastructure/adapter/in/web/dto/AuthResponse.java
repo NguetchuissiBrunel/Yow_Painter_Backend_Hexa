@@ -28,6 +28,8 @@ public class AuthResponse {
     private UUID kernelUserId;
     private UUID organizationId;
     private List<OrganizationAccessResponse> organizations;
+    private Boolean emailVerified;
+    private String registrationStatus;
 
     @Data
     @Builder

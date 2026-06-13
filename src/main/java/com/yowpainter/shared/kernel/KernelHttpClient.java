@@ -40,6 +40,14 @@ public class KernelHttpClient {
         return exchange("POST", path, body, responseType, null);
     }
 
+    public <T> T postBootstrap(String path, Object body, Class<T> responseType) {
+        return exchangeBootstrap("POST", path, body, responseType);
+    }
+
+    public <T> T postBootstrap(String path, Object body, Class<T> responseType, String accessToken) {
+        return withAccessToken(accessToken, () -> postBootstrap(path, body, responseType));
+    }
+
     public <T> T get(String path, Class<T> responseType) {
         return exchange("GET", path, null, responseType, null);
     }
@@ -142,9 +150,11 @@ public class KernelHttpClient {
     public void postVoid(String path, Object body, UUID organizationId) {
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri(path)
-                .headers(headers -> applyServerHeaders(headers, organizationId))
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body);
+                .headers(headers -> applyServerHeaders(headers, organizationId));
+
+        if (body != null) {
+            spec = spec.contentType(MediaType.APPLICATION_JSON).body(body);
+        }
 
         spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
@@ -257,9 +267,11 @@ public class KernelHttpClient {
     public void postVoid(String path, Object body) {
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri(path)
-                .headers(headers -> applyServerHeaders(headers, null))
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body);
+                .headers(headers -> applyServerHeaders(headers, null));
+
+        if (body != null) {
+            spec = spec.contentType(MediaType.APPLICATION_JSON).body(body);
+        }
 
         spec.retrieve()
                 .onStatus(status -> status.isError(), (request, clientResponse) -> {
@@ -272,6 +284,24 @@ public class KernelHttpClient {
         RestClient.RequestBodySpec spec = restClient.method(org.springframework.http.HttpMethod.valueOf(method))
                 .uri(path)
                 .headers(headers -> applyServerHeaders(headers, organizationId));
+
+        if (body != null) {
+            spec = spec.contentType(MediaType.APPLICATION_JSON).body(body);
+        }
+
+        ResponseEntity<String> response = spec.retrieve()
+                .onStatus(status -> status.isError(), (request, clientResponse) -> {
+                    throw toKernelException(path, clientResponse);
+                })
+                .toEntity(String.class);
+
+        return parseResponse(response.getBody(), responseType);
+    }
+
+    private <T> T exchangeBootstrap(String method, String path, Object body, Class<T> responseType) {
+        RestClient.RequestBodySpec spec = restClient.method(org.springframework.http.HttpMethod.valueOf(method))
+                .uri(path)
+                .headers(this::applyBootstrapServerHeaders);
 
         if (body != null) {
             spec = spec.contentType(MediaType.APPLICATION_JSON).body(body);
@@ -336,10 +366,22 @@ public class KernelHttpClient {
     }
 
     private void applyServerHeaders(HttpHeaders headers, UUID organizationId) {
-        headers.set("X-Client-Id", properties.clientId());
-        headers.set("X-Api-Key", properties.apiKey());
-        headers.set("X-Tenant-Id", properties.tenantId());
+        applyClientHeaders(headers, properties.clientId(), properties.apiKey());
+        applyContextHeaders(headers, organizationId);
+    }
 
+    private void applyBootstrapServerHeaders(HttpHeaders headers) {
+        applyClientHeaders(headers, properties.effectiveBootstrapClientId(), properties.effectiveBootstrapApiKey());
+        applyContextHeaders(headers, null);
+    }
+
+    private void applyClientHeaders(HttpHeaders headers, String clientId, String apiKey) {
+        headers.set("X-Client-Id", clientId);
+        headers.set("X-Api-Key", apiKey);
+        headers.set("X-Tenant-Id", properties.tenantId());
+    }
+
+    private void applyContextHeaders(HttpHeaders headers, UUID organizationId) {
         RequestContext.State context = RequestContext.get();
         if (context != null && context.accessToken() != null && !context.accessToken().isBlank()) {
             headers.setBearerAuth(context.accessToken());

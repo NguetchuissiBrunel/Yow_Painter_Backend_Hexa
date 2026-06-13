@@ -2,6 +2,7 @@ package com.yowpainter.support;
 
 import com.yowpainter.modules.auth.application.port.out.KernelAuthPort;
 import com.yowpainter.shared.kernel.KernelBootstrapAdminSession;
+import com.yowpainter.shared.kernel.port.KernelActorPort;
 import com.yowpainter.shared.kernel.port.KernelAdministrationPort;
 import com.yowpainter.shared.kernel.port.KernelFilePort;
 import com.yowpainter.shared.kernel.port.KernelNotificationPort;
@@ -47,11 +48,58 @@ public class TestKernelConfiguration {
             }
 
             @Override
+            public DiscoverSignUpContextsResult discoverSignUpContexts(String organizationCode) {
+                return new DiscoverSignUpContextsResult(
+                        "test-selection-token",
+                        3600,
+                        List.of(new SignUpContext(
+                                "ctx-" + organizationCode,
+                                UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                                UUID.randomUUID(),
+                                organizationCode,
+                                organizationCode,
+                                "BUSINESS"
+                        ))
+                );
+            }
+
+            @Override
+            public KernelLoginResult signUpWithContext(ContextualSignUpCommand command) {
+                credentials.put(command.email(), command.password());
+                return new KernelLoginResult(
+                        UUID.nameUUIDFromBytes(("kernel-user-" + command.email()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        UUID.randomUUID(),
+                        command.email(),
+                        command.email(),
+                        "test-token-" + command.email(),
+                        "refresh-" + command.email(),
+                        "Bearer",
+                        3600,
+                        Set.of("ROLE_BUYER"),
+                        List.of(),
+                        false,
+                        "PENDING",
+                        "PENDING"
+                );
+            }
+
+            @Override
+            public void requestEmailVerification(String accessToken) {
+            }
+
+            @Override
+            public KernelLoginResult confirmEmailVerification(String verificationToken) {
+                return buildLoginResult("artist@example.com");
+            }
+
+            @Override
             public KernelLoginResult refresh(String refreshToken) {
                 return new KernelLoginResult(
                         UUID.randomUUID(), null, UUID.randomUUID(),
                         refreshToken, refreshToken, "test-token-" + refreshToken,
-                        refreshToken, "Bearer", 3600, Set.of("ROLE_BUYER"), List.of()
+                        refreshToken, "Bearer", 3600, Set.of("ROLE_BUYER"), List.of(),
+                        true, "COMPLETED", "ACTIVE"
                 );
             }
 
@@ -97,7 +145,7 @@ public class TestKernelConfiguration {
             }
 
             private KernelLoginResult buildLoginResult(String email) {
-                UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(StandardCharsets.UTF_8));
+                UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 return new KernelLoginResult(
                         userId,
                         UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -109,7 +157,10 @@ public class TestKernelConfiguration {
                         "Bearer",
                         3600,
                         Set.of("ROLE_ARTIST"),
-                        List.of()
+                        List.of(),
+                        true,
+                        "COMPLETED",
+                        "ACTIVE"
                 );
             }
         };
@@ -125,9 +176,25 @@ public class TestKernelConfiguration {
             }
 
             @Override
+            public String requireAccessToken(String mfaCode) {
+                return requireAccessToken();
+            }
+
+            @Override
             public void invalidate() {
             }
         };
+    }
+
+    @Bean
+    @Primary
+    KernelActorPort testKernelActorPort() {
+        return (command, accessToken) -> new KernelActorPort.BusinessActorView(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                command.code(),
+                command.name()
+        );
     }
 
     @Bean
@@ -143,6 +210,10 @@ public class TestKernelConfiguration {
                         command.shortName(),
                         command.longName()
                 );
+            }
+
+            @Override
+            public void approveOrganization(UUID organizationId, String reason, String adminAccessToken) {
             }
 
             @Override
@@ -243,6 +314,14 @@ public class TestKernelConfiguration {
 
             @Override
             public void grantOrganizationWriteAccess(UUID userId) {
+            }
+
+            @Override
+            public void provisionDefaultRolesForOrganization(UUID organizationId) {
+            }
+
+            @Override
+            public void grantOrganizationAdminRole(UUID userId, UUID organizationId) {
             }
         };
     }

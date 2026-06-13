@@ -46,6 +46,14 @@ public class KernelBootstrapAdminSession {
     }
 
     public String requireAccessToken() {
+        return requireAccessToken(null);
+    }
+
+    public String requireAccessToken(String mfaCode) {
+        if (mfaCode != null && !mfaCode.isBlank()) {
+            invalidate();
+        }
+
         CachedToken current = cachedToken;
         if (current != null && current.isValid()) {
             return current.accessToken();
@@ -56,13 +64,17 @@ public class KernelBootstrapAdminSession {
             if (current != null && current.isValid()) {
                 return current.accessToken();
             }
-            CachedToken refreshed = loginBootstrapAdmin();
+            CachedToken refreshed = loginBootstrapAdmin(mfaCode);
             cachedToken = refreshed;
             return refreshed.accessToken();
         }
     }
 
     private CachedToken loginBootstrapAdmin() {
+        return loginBootstrapAdmin(null);
+    }
+
+    private CachedToken loginBootstrapAdmin(String mfaCode) {
         String username = properties.bootstrapAdminUsername();
         String password = properties.bootstrapAdminPassword();
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
@@ -72,10 +84,10 @@ public class KernelBootstrapAdminSession {
             );
         }
 
-        CachedToken session = loginWithOptionalMfa(username, password);
+        CachedToken session = loginWithOptionalMfa(username, password, mfaCode);
         if (isPrivilegedAdminToken(session.accessToken()) && !isMfaEnabledToken(session.accessToken())) {
             enableAccountMfa(session.accessToken(), username);
-            session = loginWithOptionalMfa(username, password);
+            session = loginWithOptionalMfa(username, password, mfaCode);
         }
         if (isPrivilegedAdminToken(session.accessToken()) && !isMfaEnabledToken(session.accessToken())) {
             throw new IllegalStateException(
@@ -86,8 +98,8 @@ public class KernelBootstrapAdminSession {
         return session;
     }
 
-    private CachedToken loginWithOptionalMfa(String username, String password) {
-        KernelAuthLoginPayloadDto login = kernelHttpClient.post(
+    private CachedToken loginWithOptionalMfa(String username, String password, String mfaCode) {
+        KernelAuthLoginPayloadDto login = kernelHttpClient.postBootstrap(
                 "/api/auth/login",
                 new KernelLoginRequestDto(username, password),
                 KernelAuthLoginPayloadDto.class
@@ -98,9 +110,20 @@ public class KernelBootstrapAdminSession {
         }
 
         if (login.mfaToken() != null && login.codePreview() != null) {
-            KernelAuthLoginPayloadDto confirmed = kernelHttpClient.post(
+            KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
                     "/api/auth/login/mfa/confirm",
                     new KernelConfirmMfaLoginRequestDto(login.mfaToken(), login.codePreview()),
+                    KernelAuthLoginPayloadDto.class
+            );
+            if (confirmed.accessToken() != null && !confirmed.accessToken().isBlank()) {
+                return CachedToken.of(confirmed.accessToken(), confirmed.expiresInSeconds());
+            }
+        }
+
+        if (login.mfaToken() != null && mfaCode != null && !mfaCode.isBlank()) {
+            KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
+                    "/api/auth/login/mfa/confirm",
+                    new KernelConfirmMfaLoginRequestDto(login.mfaToken(), mfaCode),
                     KernelAuthLoginPayloadDto.class
             );
             if (confirmed.accessToken() != null && !confirmed.accessToken().isBlank()) {
@@ -115,21 +138,19 @@ public class KernelBootstrapAdminSession {
 
     private void enableAccountMfa(String accessToken, String username) {
         try {
-            KernelOtpChallengePayloadDto challenge = kernelHttpClient.post(
+            KernelOtpChallengePayloadDto challenge = kernelHttpClient.postBootstrap(
                     "/api/auth/mfa/enable",
                     new KernelEnableMfaRequestDto("EMAIL"),
                     KernelOtpChallengePayloadDto.class,
-                    null,
                     accessToken
             );
             if (challenge.challengeToken() == null || challenge.codePreview() == null) {
                 throw new IllegalStateException("Reponse MFA enable bootstrap invalide (challenge manquant).");
             }
-            kernelHttpClient.post(
+            kernelHttpClient.postBootstrap(
                     "/api/auth/mfa/confirm",
                     new KernelConfirmMfaEnableRequestDto(challenge.challengeToken(), challenge.codePreview()),
                     Object.class,
-                    null,
                     accessToken
             );
             log.info("MFA active sur le compte bootstrap kernel {}", username);

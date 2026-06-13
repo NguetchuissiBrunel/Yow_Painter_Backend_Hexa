@@ -28,7 +28,24 @@ final class KernelAuthMapper {
                 .kernelUserId(loginResult.userId())
                 .organizationId(organizationId)
                 .organizations(mapOrganizations(loginResult.organizations()))
+                .emailVerified(resolveEmailVerified(loginResult, artist))
+                .registrationStatus(artist != null ? artist.getStatus() : null)
                 .build();
+    }
+
+    private static Boolean resolveEmailVerified(
+            KernelAuthPort.KernelLoginResult loginResult,
+            Artist artist
+    ) {
+        if (Boolean.TRUE.equals(loginResult.emailVerified())) {
+            return true;
+        }
+        if (artist != null
+                && artist.getStatus() != null
+                && !"PENDING_EMAIL".equalsIgnoreCase(artist.getStatus())) {
+            return true;
+        }
+        return loginResult.emailVerified();
     }
 
     private static UUID resolveOrganizationId(KernelAuthPort.KernelLoginResult loginResult, Artist artist) {

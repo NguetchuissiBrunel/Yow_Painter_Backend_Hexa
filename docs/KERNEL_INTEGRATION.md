@@ -42,7 +42,7 @@ Le backend YowPainter est **toujours** un consommateur du kernel (auth, org, com
 - `POST /api/auth/login` → proxy kernel → JWT RS256
 - `POST /api/auth/forgot-password` → kernel `/api/auth/forgot-password` + `/api/auth/password-reset/issue`
 - `POST /api/auth/reset-password` → kernel `/api/auth/reset-password` (token kernel)
-- Inscription artiste → sign-up kernel + création org + plan commercial + profil `Artist` local
+- Inscription artiste → sign-up kernel ; provisioning org/plan/rôle soit **automatique** (`KSM_KERNEL_AUTO_PROVISION_ARTISTS=true`), soit **validation admin** (`false`, voir [ARTIST_APPROVAL_WORKFLOW.md](./ARTIST_APPROVAL_WORKFLOW.md))
 - Inscription acheteur → sign-up kernel `PROSPECT` + `AppUser` local
 - Inscription admin (`POST /api/admin/auth/register`) → sign-up kernel + rôle `GENERAL_ADMIN` (provisionné via `POST /api/administration/roles/defaults`) + assignation via `/api/administration/users/{id}/roles` (session bootstrap `platform-admin` requise)
 

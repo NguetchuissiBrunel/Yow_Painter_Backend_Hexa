@@ -12,8 +12,20 @@ public record KernelProperties(
         String defaultPlanCode,
         String defaultCurrency,
         String bootstrapAdminUsername,
-        String bootstrapAdminPassword
+        String bootstrapAdminPassword,
+        String bootstrapClientId,
+        String bootstrapApiKey,
+        String signupPlatformOrganizationCode,
+        boolean autoProvisionArtists
 ) {
+    public String effectiveBootstrapClientId() {
+        return bootstrapClientId == null || bootstrapClientId.isBlank() ? clientId() : bootstrapClientId;
+    }
+
+    public String effectiveBootstrapApiKey() {
+        return bootstrapApiKey == null || bootstrapApiKey.isBlank() ? apiKey() : bootstrapApiKey;
+    }
+
     public String resolvedJwkSetUri() {
         if (jwkSetUri != null && !jwkSetUri.isBlank()) {
             return jwkSetUri;

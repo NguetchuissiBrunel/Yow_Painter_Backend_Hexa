@@ -3,6 +3,7 @@ package com.yowpainter.modules.auth.infrastructure.adapter.in.web;
 import java.util.List;
 
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.AuthResponse;
+import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.ConfirmEmailRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.LoginRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.RefreshTokenRequest;
 import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.RegisterRequest;
@@ -13,10 +14,15 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -26,6 +32,9 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+
+    @Value("${app.frontend-url:http://localhost:3000}")
+    private String frontendUrl;
 
     @GetMapping("/roles")
     @Operation(summary = "Lister les roles disponibles pour l'inscription")
@@ -119,6 +128,47 @@ public class AuthController {
             return ResponseEntity.badRequest().body(AuthResponse.builder()
                     .message(e.getMessage())
                     .build());
+        }
+    }
+
+    @PostMapping("/confirm-email")
+    @Operation(summary = "Confirmer l'e-mail d'inscription (artiste ou acheteur, lien recu par mail)")
+    public ResponseEntity<AuthResponse> confirmEmail(@Valid @RequestBody ConfirmEmailRequest request) {
+        try {
+            return ResponseEntity.ok(authService.confirmEmail(request.getToken()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(AuthResponse.builder()
+                    .message(e.getMessage())
+                    .build());
+        }
+    }
+
+    @GetMapping("/confirm-email")
+    @Operation(summary = "Confirmer l'e-mail via lien GET (redirection vers le frontend)")
+    public ResponseEntity<Void> confirmEmailFromLink(
+            @RequestParam(required = false) String token,
+            @RequestParam(required = false) String verificationToken
+    ) {
+        String resolvedToken = token != null && !token.isBlank() ? token : verificationToken;
+        try {
+            AuthResponse response = authService.confirmEmail(resolvedToken);
+            URI redirect = UriComponentsBuilder.fromUriString(frontendUrl)
+                    .path("/login")
+                    .queryParam("emailVerified", true)
+                    .queryParam("message", response.getMessage())
+                    .encode(StandardCharsets.UTF_8)
+                    .build()
+                    .toUri();
+            return ResponseEntity.status(HttpStatus.FOUND).location(redirect).build();
+        } catch (IllegalArgumentException e) {
+            URI redirect = UriComponentsBuilder.fromUriString(frontendUrl)
+                    .path("/login")
+                    .queryParam("emailVerified", false)
+                    .queryParam("message", e.getMessage())
+                    .encode(StandardCharsets.UTF_8)
+                    .build()
+                    .toUri();
+            return ResponseEntity.status(HttpStatus.FOUND).location(redirect).build();
         }
     }
 

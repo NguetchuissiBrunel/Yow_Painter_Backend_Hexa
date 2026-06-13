@@ -33,6 +33,7 @@ public class AuthService {
     private final EmailService emailService;
     private final KernelAuthPort kernelAuthPort;
     private final KernelArtistRegistrationService kernelArtistRegistrationService;
+    private final KernelBuyerRegistrationService kernelBuyerRegistrationService;
     private final KernelAdminRegistrationService kernelAdminRegistrationService;
 
     public List<String> getAvailableRoles() {
@@ -77,7 +78,54 @@ public class AuthService {
             return kernelArtistRegistrationService.registerArtist(request);
         }
 
-        return registerBuyerViaKernel(request);
+        return kernelBuyerRegistrationService.registerBuyer(request);
+    }
+
+    @Transactional
+    public AuthResponse confirmEmail(String verificationToken) {
+        if (verificationToken == null || verificationToken.isBlank()) {
+            throw new IllegalArgumentException("Le token de verification est requis");
+        }
+
+        try {
+            KernelAuthPort.KernelLoginResult confirmed = kernelAuthPort.confirmEmailVerification(verificationToken);
+
+            Optional<Artist> artist = artistRepository.findByEmail(confirmed.email());
+            if (artist.isPresent()) {
+                kernelArtistRegistrationService.applyEmailConfirmedArtist(artist.get(), confirmed);
+                AuthResponse response = KernelAuthMapper.toAuthResponse(confirmed, artist.get());
+                if (kernelArtistRegistrationService.isArtistActive(artist.get())) {
+                    response.setMessage("E-mail verifie. Votre espace artiste est actif, vous pouvez vous connecter.");
+                    response.setRegistrationStatus("ACTIVE");
+                } else {
+                    response.setEmailVerified(true);
+                    response.setRegistrationStatus("PENDING_APPROVAL");
+                    response.setMessage(
+                            "E-mail verifie. Votre demande est en attente de validation par notre equipe."
+                    );
+                }
+                return response;
+            }
+
+            Optional<AppUser> buyer = userRepository.findByEmail(confirmed.email())
+                    .filter(user -> user.getRole() == UserRole.ROLE_BUYER);
+            if (buyer.isPresent()) {
+                kernelBuyerRegistrationService.applyEmailConfirmedBuyer(buyer.get(), confirmed);
+                AuthResponse response = KernelAuthMapper.toAuthResponse(confirmed, null);
+                response.setFirstName(buyer.get().getFirstName());
+                response.setLastName(buyer.get().getLastName());
+                response.setRole(UserRole.ROLE_BUYER.name());
+                response.setRegistrationStatus("ACTIVE");
+                response.setMessage("E-mail verifie. Vous pouvez vous connecter.");
+                return response;
+            }
+
+            throw new IllegalArgumentException("Profil local introuvable pour " + confirmed.email());
+        } catch (KernelClientException ex) {
+            throw new IllegalArgumentException(
+                    ex.getMessage() != null ? ex.getMessage() : "Echec de la verification e-mail"
+            );
+        }
     }
 
     @Transactional
@@ -114,41 +162,11 @@ public class AuthService {
         }
     }
 
-    private AuthResponse registerBuyerViaKernel(RegisterRequest request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Un utilisateur avec cet email existe deja");
-        }
-        KernelAuthPort.KernelLoginResult signup;
-        try {
-            signup = kernelAuthPort.signUp(new KernelAuthPort.SignUpCommand(
-                    request.getFirstName(),
-                    request.getLastName(),
-                    request.getEmail(),
-                    request.getPassword(),
-                    "PROSPECT"
-            ));
-        } catch (KernelClientException ex) {
-            throw new IllegalArgumentException(
-                    ex.getMessage() != null ? ex.getMessage() : "Echec inscription via le kernel"
-            );
-        }
-        AppUser buyer = AppUser.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(KERNEL_MANAGED_PASSWORD))
-                .role(UserRole.ROLE_BUYER)
-                .kernelUserId(signup.userId())
-                .build();
-        userRepository.save(buyer);
-        return KernelAuthMapper.toAuthResponse(signup, null);
-    }
-
     private Artist syncLocalKernelLink(KernelAuthPort.KernelLoginResult loginResult) {
         if (loginResult.userId() != null) {
             Optional<Artist> byKernelUser = artistRepository.findByKernelUserId(loginResult.userId());
             if (byKernelUser.isPresent()) {
-                return byKernelUser.get();
+                return refreshArtistStatus(byKernelUser.get(), loginResult);
             }
             userRepository.findByKernelUserId(loginResult.userId()).ifPresent(user -> {});
         }
@@ -159,7 +177,7 @@ public class AuthService {
         Optional<Artist> artist = artistRepository.findByEmail(loginResult.email())
                 .map(found -> {
                     linkKernelUserId(found, loginResult.userId());
-                    return found;
+                    return refreshArtistStatus(found, loginResult);
                 });
         if (artist.isPresent()) {
             return artist.get();
@@ -168,6 +186,21 @@ public class AuthService {
         userRepository.findByEmail(loginResult.email())
                 .ifPresent(user -> linkKernelUserId(user, loginResult.userId()));
         return null;
+    }
+
+    private Artist refreshArtistStatus(Artist artist, KernelAuthPort.KernelLoginResult loginResult) {
+        if (Boolean.TRUE.equals(loginResult.emailVerified())
+                && "PENDING_EMAIL".equalsIgnoreCase(artist.getStatus())) {
+            artist.setStatus("PENDING_APPROVAL");
+        }
+        if (loginResult.organizations() != null && !loginResult.organizations().isEmpty()) {
+            artist.setOrganizationId(loginResult.organizations().get(0).organizationId());
+        }
+        if (loginResult.actorId() != null) {
+            artist.setKernelActorId(loginResult.actorId());
+        }
+        kernelArtistRegistrationService.provisionArtistIfPending(artist, loginResult);
+        return artistRepository.save(artist);
     }
 
     private AppUser linkKernelUserId(AppUser user, UUID kernelUserId) {

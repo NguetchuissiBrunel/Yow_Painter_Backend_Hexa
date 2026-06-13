@@ -1,5 +1,10 @@
 package com.yowpainter.modules.admin.infrastructure.adapter.in.web;
 
+import com.yowpainter.modules.admin.application.service.ArtistApprovalService;
+import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.ApproveArtistRequest;
+import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.ArtistApprovalResponse;
+import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.PendingArtistResponse;
+import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.RejectArtistRequest;
 import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,7 +26,40 @@ import java.util.UUID;
 public class AdminController {
 
     private final com.yowpainter.modules.admin.application.service.AdminService adminService;
+    private final ArtistApprovalService artistApprovalService;
     private final AuthenticatedUserResolver authenticatedUserResolver;
+
+    @GetMapping("/artists/pending")
+    @Operation(summary = "Lister les artistes en attente de validation")
+    public ResponseEntity<List<PendingArtistResponse>> listPendingArtists() {
+        return ResponseEntity.ok(artistApprovalService.listPendingArtists());
+    }
+
+    @PostMapping("/artists/{id}/approve")
+    @Operation(summary = "Approuver un artiste et provisionner son espace Kernel")
+    public ResponseEntity<ArtistApprovalResponse> approveArtist(
+            @PathVariable UUID id,
+            @RequestBody(required = false) ApproveArtistRequest request
+    ) {
+        try {
+            return ResponseEntity.ok(artistApprovalService.approveArtist(id, request));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/artists/{id}/reject")
+    @Operation(summary = "Refuser une demande artiste")
+    public ResponseEntity<ArtistApprovalResponse> rejectArtist(
+            @PathVariable UUID id,
+            @RequestBody(required = false) RejectArtistRequest request
+    ) {
+        try {
+            return ResponseEntity.ok(artistApprovalService.rejectArtist(id, request));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
 
     @GetMapping("/tenants")
     @Operation(summary = "Lister tous les artistes / tenants enregistres")

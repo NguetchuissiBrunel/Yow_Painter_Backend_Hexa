@@ -68,6 +68,10 @@ ksm:
     default-currency: ${KSM_KERNEL_DEFAULT_CURRENCY:XAF}
     bootstrap-admin-username: ${KSM_KERNEL_BOOTSTRAP_ADMIN_USERNAME:}
     bootstrap-admin-password: ${KSM_KERNEL_BOOTSTRAP_ADMIN_PASSWORD:}
+    bootstrap-client-id: ${KSM_KERNEL_BOOTSTRAP_CLIENT_ID:}
+    bootstrap-api-key: ${KSM_KERNEL_BOOTSTRAP_API_KEY:}
+    signup-platform-organization-code: ${KSM_KERNEL_SIGNUP_PLATFORM_ORG_CODE:yow-painter}
+    auto-provision-artists: ${KSM_KERNEL_AUTO_PROVISION_ARTISTS:false}
     legacy-migration:
       enabled: ${KSM_KERNEL_LEGACY_MIGRATION_ENABLED:false}
     kafka:

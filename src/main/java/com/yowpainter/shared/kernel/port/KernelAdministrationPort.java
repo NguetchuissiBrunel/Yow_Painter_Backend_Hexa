@@ -13,6 +13,10 @@ public interface KernelAdministrationPort {
 
     void grantOrganizationWriteAccess(UUID userId);
 
+    void provisionDefaultRolesForOrganization(UUID organizationId);
+
+    void grantOrganizationAdminRole(UUID userId, UUID organizationId);
+
     record AdministrativeRoleView(UUID id, String code, String name) {
     }
 }

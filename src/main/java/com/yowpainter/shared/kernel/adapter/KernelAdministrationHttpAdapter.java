@@ -17,6 +17,7 @@ import java.util.UUID;
 public class KernelAdministrationHttpAdapter implements KernelAdministrationPort {
 
     private static final String TENANT_SCOPE = "TENANT";
+    private static final String ORGANIZATION_SCOPE = "ORGANIZATION";
     private static final String ORGANIZATION_ADMIN_ROLE = "ORGANIZATION_ADMIN";
 
     private final KernelHttpClient kernelHttpClient;
@@ -60,7 +61,7 @@ public class KernelAdministrationHttpAdapter implements KernelAdministrationPort
 
     @Override
     public void assignTenantAdminRole(UUID userId, UUID roleId) {
-        assignRole(userId, roleId, adminToken());
+        assignRole(userId, roleId, null, TENANT_SCOPE, adminToken());
     }
 
     @Override
@@ -79,14 +80,58 @@ public class KernelAdministrationHttpAdapter implements KernelAdministrationPort
                         "Role " + ORGANIZATION_ADMIN_ROLE + " introuvable sur le kernel."
                 ));
 
-        assignRole(userId, organizationAdminRoleId, adminToken());
+        assignRole(userId, organizationAdminRoleId, null, TENANT_SCOPE, adminToken());
     }
 
-    private void assignRole(UUID userId, UUID roleId, String adminToken) {
+    @Override
+    public void provisionDefaultRolesForOrganization(UUID organizationId) {
+        String adminToken = bootstrapAdminSession.requireAccessToken();
+        kernelHttpClient.postList(
+                "/api/administration/roles/defaults",
+                Map.of(),
+                KernelAdministrativeRoleResponseDto.class,
+                organizationId,
+                adminToken
+        );
+    }
+
+    @Override
+    public void grantOrganizationAdminRole(UUID userId, UUID organizationId) {
+        try {
+            provisionDefaultRolesForOrganization(organizationId);
+        } catch (Exception ex) {
+            log.warn("Provision des roles organisation kernel ignoree: {}", ex.getMessage());
+        }
+
+        UUID organizationAdminRoleId = listRolesForOrganization(organizationId).stream()
+                .filter(role -> ORGANIZATION_ADMIN_ROLE.equalsIgnoreCase(role.code()))
+                .map(AdministrativeRoleView::id)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Role " + ORGANIZATION_ADMIN_ROLE + " introuvable pour l'organisation " + organizationId + "."
+                ));
+
+        assignRole(userId, organizationAdminRoleId, organizationId, ORGANIZATION_SCOPE, adminToken());
+    }
+
+    private List<AdministrativeRoleView> listRolesForOrganization(UUID organizationId) {
+        String adminToken = bootstrapAdminSession.requireAccessToken();
+        return kernelHttpClient.getListWithQuery(
+                "/api/administration/roles",
+                Map.of(),
+                KernelAdministrativeRoleResponseDto.class,
+                organizationId,
+                adminToken
+        ).stream()
+                .map(dto -> new AdministrativeRoleView(dto.id(), dto.code(), dto.name()))
+                .toList();
+    }
+
+    private void assignRole(UUID userId, UUID roleId, UUID organizationId, String scope, String adminToken) {
         kernelHttpClient.postVoid(
                 "/api/administration/users/" + userId + "/roles",
-                new KernelAssignAdministrativeRoleRequestDto(roleId, TENANT_SCOPE, null, TENANT_SCOPE),
-                null,
+                new KernelAssignAdministrativeRoleRequestDto(roleId, scope, organizationId, scope),
+                organizationId,
                 adminToken
         );
     }

@@ -4,6 +4,7 @@ import com.yowpainter.config.KernelProperties;
 import com.yowpainter.shared.kernel.KernelHttpClient;
 import com.yowpainter.shared.kernel.adapter.dto.KernelApplyCommercialPlanRequestDto;
 import com.yowpainter.shared.kernel.adapter.dto.KernelCreateOrganizationRequestDto;
+import com.yowpainter.shared.kernel.adapter.dto.KernelGovernanceActionRequestDto;
 import com.yowpainter.shared.kernel.adapter.dto.KernelOrganizationResponseDto;
 import com.yowpainter.shared.kernel.port.KernelOrganizationPort;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,16 @@ public class KernelOrganizationHttpAdapter implements KernelOrganizationPort {
         );
         return new OrganizationView(response.id(), response.businessActorId(), response.code(),
                 response.shortName(), response.longName());
+    }
+
+    @Override
+    public void approveOrganization(UUID organizationId, String reason, String adminAccessToken) {
+        kernelHttpClient.postVoid(
+                "/api/organizations/" + organizationId + "/approve",
+                new KernelGovernanceActionRequestDto(reason),
+                organizationId,
+                adminAccessToken
+        );
     }
 
     @Override
