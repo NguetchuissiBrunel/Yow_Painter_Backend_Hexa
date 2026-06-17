@@ -40,7 +40,7 @@ $bootstrapHeaders = @{
 Write-Host "Connexion platform-admin sur $KernelBaseUrl ..."
 $login = Invoke-KernelJson -Method POST -Uri "$KernelBaseUrl/api/auth/login" -Headers $bootstrapHeaders -Body @{
     principal = "platform-admin"
-    password  = "PlatformAdmin!123"
+    password  = "281kFEOhFYuj7n9cfgGp"
 }
 
 $accessToken = $login.data.accessToken

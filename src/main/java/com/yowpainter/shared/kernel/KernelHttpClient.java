@@ -132,6 +132,13 @@ public class KernelHttpClient {
                 ? path
                 : path + "?documentType=" + documentType;
 
+        System.out.println(">>> KERNEL MULTIPART HTTP REQUEST START >>>");
+        System.out.println("URL: " + properties.baseUrl() + uri);
+        System.out.println("File Name: " + fileName);
+        System.out.println("ContentType: " + resolvedContentType);
+        System.out.println("DocumentType: " + documentType);
+        System.out.println(">>> KERNEL MULTIPART HTTP REQUEST END >>>");
+
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri(uri)
                 .headers(headers -> applyServerHeaders(headers, organizationId))
@@ -148,6 +155,7 @@ public class KernelHttpClient {
     }
 
     public void postVoid(String path, Object body, UUID organizationId) {
+        logRequest("POST", path, body, organizationId);
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri(path)
                 .headers(headers -> applyServerHeaders(headers, organizationId));
@@ -196,6 +204,7 @@ public class KernelHttpClient {
     }
 
     private String exchangeRaw(String method, String path, Object body, UUID organizationId) {
+        logRequest(method, path, body, organizationId);
         RestClient.RequestBodySpec spec = restClient.method(org.springframework.http.HttpMethod.valueOf(method))
                 .uri(path)
                 .headers(headers -> applyServerHeaders(headers, organizationId));
@@ -209,6 +218,9 @@ public class KernelHttpClient {
                     throw toKernelException(path, clientResponse);
                 })
                 .toEntity(String.class);
+        System.out.println("<<< KERNEL HTTP RESPONSE SUCCESS (RAW) <<<");
+        System.out.println("Raw HTTP Response Body: " + response.getBody());
+        System.out.println("<<< KERNEL HTTP RESPONSE SUCCESS (RAW) END <<<");
         return response.getBody();
     }
 
@@ -265,6 +277,7 @@ public class KernelHttpClient {
     }
 
     public void postVoid(String path, Object body) {
+        logRequest("POST", path, body, null);
         RestClient.RequestBodySpec spec = restClient.post()
                 .uri(path)
                 .headers(headers -> applyServerHeaders(headers, null));
@@ -281,6 +294,7 @@ public class KernelHttpClient {
     }
 
     private <T> T exchange(String method, String path, Object body, Class<T> responseType, UUID organizationId) {
+        logRequest(method, path, body, organizationId);
         RestClient.RequestBodySpec spec = restClient.method(org.springframework.http.HttpMethod.valueOf(method))
                 .uri(path)
                 .headers(headers -> applyServerHeaders(headers, organizationId));
@@ -299,6 +313,7 @@ public class KernelHttpClient {
     }
 
     private <T> T exchangeBootstrap(String method, String path, Object body, Class<T> responseType) {
+        logRequestBootstrap(method, path, body);
         RestClient.RequestBodySpec spec = restClient.method(org.springframework.http.HttpMethod.valueOf(method))
                 .uri(path)
                 .headers(this::applyBootstrapServerHeaders);
@@ -339,6 +354,16 @@ public class KernelHttpClient {
                     message = extractFallbackKernelMessage(path, body, message);
                 }
             }
+
+            System.err.println("<<< KERNEL HTTP RESPONSE ERROR <<<");
+            System.err.println("Path: " + path);
+            System.err.println("HTTP Status Code: " + statusCode.value() + " " + statusCode);
+            System.err.println("Response Headers: " + response.getHeaders());
+            System.err.println("Raw HTTP Response Body: " + body);
+            System.err.println("Parsed Message: " + message);
+            System.err.println("Parsed Error Code: " + errorCode);
+            System.err.println("<<< KERNEL HTTP RESPONSE ERROR END <<<");
+
             return new KernelClientException(message, statusCode, errorCode);
         } catch (IOException ex) {
             return new KernelClientException("Kernel call failed on " + path, null, null);
@@ -401,6 +426,10 @@ public class KernelHttpClient {
             throw new KernelClientException("Empty kernel response body", null, null);
         }
         try {
+            System.out.println("<<< KERNEL HTTP RESPONSE SUCCESS <<<");
+            System.out.println("Raw HTTP Response Body: " + body);
+            System.out.println("<<< KERNEL HTTP RESPONSE SUCCESS END <<<");
+
             if (KernelApiResponse.class.equals(responseType)) {
                 return objectMapper.readValue(body, responseType);
             }
@@ -419,6 +448,48 @@ public class KernelHttpClient {
             throw ex;
         } catch (Exception ex) {
             throw new KernelClientException("Unable to parse kernel response: " + ex.getMessage(), null, null);
+        }
+    }
+
+    private void logRequest(String method, String path, Object body, UUID organizationId) {
+        try {
+            System.out.println(">>> KERNEL HTTP REQUEST START >>>");
+            System.out.println("URL: " + properties.baseUrl() + path);
+            System.out.println("Method: " + method);
+            
+            HttpHeaders tempHeaders = new HttpHeaders();
+            applyServerHeaders(tempHeaders, organizationId);
+            System.out.println("Headers: " + tempHeaders);
+            
+            if (body != null) {
+                System.out.println("Payload: " + objectMapper.writeValueAsString(body));
+            } else {
+                System.out.println("Payload: [Empty]");
+            }
+            System.out.println(">>> KERNEL HTTP REQUEST END >>>");
+        } catch (Exception ex) {
+            System.err.println("Failed to log kernel request details: " + ex.getMessage());
+        }
+    }
+
+    private void logRequestBootstrap(String method, String path, Object body) {
+        try {
+            System.out.println(">>> KERNEL BOOTSTRAP HTTP REQUEST START >>>");
+            System.out.println("URL: " + properties.baseUrl() + path);
+            System.out.println("Method: " + method);
+            
+            HttpHeaders tempHeaders = new HttpHeaders();
+            applyBootstrapServerHeaders(tempHeaders);
+            System.out.println("Headers: " + tempHeaders);
+            
+            if (body != null) {
+                System.out.println("Payload: " + objectMapper.writeValueAsString(body));
+            } else {
+                System.out.println("Payload: [Empty]");
+            }
+            System.out.println(">>> KERNEL BOOTSTRAP HTTP REQUEST END >>>");
+        } catch (Exception ex) {
+            System.err.println("Failed to log kernel bootstrap request details: " + ex.getMessage());
         }
     }
 

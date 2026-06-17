@@ -9,7 +9,63 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class YowPainterApplication {
 
     public static void main(String[] args) {
+        loadEnvFile(".env");
+        loadEnvFile(".env.local");
+        runFlywayMigrations();
         SpringApplication.run(YowPainterApplication.class, args);
+    }
+
+    private static void runFlywayMigrations() {
+        String url = System.getProperty("SPRING_DATASOURCE_URL");
+        String user = System.getProperty("SPRING_DATASOURCE_USERNAME");
+        String pass = System.getProperty("SPRING_DATASOURCE_PASSWORD");
+        if (url == null || url.isEmpty()) {
+            return;
+        }
+        System.out.println("Running programmatic Flyway migrations on public schema...");
+        try {
+            org.flywaydb.core.Flyway flyway = org.flywaydb.core.Flyway.configure()
+                    .dataSource(url, user, pass)
+                    .schemas("public")
+                    .locations("classpath:db/migration/public")
+                    .baselineOnMigrate(true)
+                    .outOfOrder(true)
+                    .load();
+            flyway.migrate();
+            System.out.println("Programmatic Flyway migrations completed successfully.");
+        } catch (Exception e) {
+            System.err.println("Failed to run Flyway migrations: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static void loadEnvFile(String filename) {
+        java.io.File file = new java.io.File(filename);
+        if (!file.exists()) {
+            return;
+        }
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                int eqIdx = line.indexOf('=');
+                if (eqIdx > 0) {
+                    String key = line.substring(0, eqIdx).trim();
+                    String value = line.substring(eqIdx + 1).trim();
+                    if (value.startsWith("\"") && value.endsWith("\"") && value.length() >= 2) {
+                        value = value.substring(1, value.length() - 1);
+                    } else if (value.startsWith("'") && value.endsWith("'") && value.length() >= 2) {
+                        value = value.substring(1, value.length() - 1);
+                    }
+                    System.setProperty(key, value);
+                }
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("Failed to load environment file " + filename + ": " + e.getMessage());
+        }
     }
 
 }

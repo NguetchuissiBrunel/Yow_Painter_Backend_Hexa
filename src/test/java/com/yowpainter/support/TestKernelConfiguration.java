@@ -53,12 +53,12 @@ public class TestKernelConfiguration {
                         "test-selection-token",
                         3600,
                         List.of(new SignUpContext(
-                                "ctx-" + organizationCode,
                                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
                                 UUID.randomUUID(),
                                 organizationCode,
                                 organizationCode,
-                                "BUSINESS"
+                                organizationCode,
+                                "ctx-" + organizationCode
                         ))
                 );
             }
@@ -66,22 +66,7 @@ public class TestKernelConfiguration {
             @Override
             public KernelLoginResult signUpWithContext(ContextualSignUpCommand command) {
                 credentials.put(command.email(), command.password());
-                return new KernelLoginResult(
-                        UUID.nameUUIDFromBytes(("kernel-user-" + command.email()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
-                        UUID.randomUUID(),
-                        command.email(),
-                        command.email(),
-                        "test-token-" + command.email(),
-                        "refresh-" + command.email(),
-                        "Bearer",
-                        3600,
-                        Set.of("ROLE_BUYER"),
-                        List.of(),
-                        false,
-                        "PENDING",
-                        "PENDING"
-                );
+                return mockLoginResult(command.email(), Set.of("ROLE_BUYER"));
             }
 
             @Override
@@ -95,12 +80,7 @@ public class TestKernelConfiguration {
 
             @Override
             public KernelLoginResult refresh(String refreshToken) {
-                return new KernelLoginResult(
-                        UUID.randomUUID(), null, UUID.randomUUID(),
-                        refreshToken, refreshToken, "test-token-" + refreshToken,
-                        refreshToken, "Bearer", 3600, Set.of("ROLE_BUYER"), List.of(),
-                        true, "COMPLETED", "ACTIVE"
-                );
+                return mockLoginResult("refreshed@example.com", Set.of("ROLE_BUYER"));
             }
 
             @Override
@@ -110,8 +90,7 @@ public class TestKernelConfiguration {
             @Override
             public KernelUserProfile me(String accessToken) {
                 String email = accessToken.replace("test-token-", "");
-                UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(StandardCharsets.UTF_8));
-                return new KernelUserProfile(userId, UUID.randomUUID(), email, email, List.of());
+                return mockUserProfile(email);
             }
 
             @Override
@@ -145,6 +124,10 @@ public class TestKernelConfiguration {
             }
 
             private KernelLoginResult buildLoginResult(String email) {
+                return mockLoginResult(email, Set.of("ROLE_ARTIST"));
+            }
+
+            private KernelLoginResult mockLoginResult(String email, Set<String> roles) {
                 UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 return new KernelLoginResult(
                         userId,
@@ -152,15 +135,56 @@ public class TestKernelConfiguration {
                         UUID.randomUUID(),
                         email,
                         email,
+                        null,
+                        null,
+                        null,
+                        "ACTIVE",
+                        "COMMERCE",
+                        "COMPLETED",
+                        0,
+                        "INDIVIDUAL",
+                        null,
+                        null,
+                        true,
+                        java.time.Instant.now(),
+                        false,
+                        null,
+                        false,
+                        null,
                         "test-token-" + email,
                         "refresh-" + email,
                         "Bearer",
                         3600,
-                        Set.of("ROLE_ARTIST"),
                         List.of(),
-                        true,
+                        roles
+                );
+            }
+
+            private KernelUserProfile mockUserProfile(String email) {
+                UUID userId = UUID.nameUUIDFromBytes(("kernel-user-" + email).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                return new KernelUserProfile(
+                        userId,
+                        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                        UUID.randomUUID(),
+                        email,
+                        email,
+                        null,
+                        null,
+                        null,
+                        "ACTIVE",
+                        "COMMERCE",
                         "COMPLETED",
-                        "ACTIVE"
+                        0,
+                        "INDIVIDUAL",
+                        null,
+                        null,
+                        true,
+                        java.time.Instant.now(),
+                        false,
+                        null,
+                        false,
+                        null,
+                        List.of()
                 );
             }
         };
@@ -210,6 +234,11 @@ public class TestKernelConfiguration {
                         command.shortName(),
                         command.longName()
                 );
+            }
+
+            @Override
+            public java.util.Optional<UUID> findOrganizationIdByCode(String code, String accessToken) {
+                return java.util.Optional.empty();
             }
 
             @Override

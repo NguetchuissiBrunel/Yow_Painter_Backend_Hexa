@@ -39,6 +39,6 @@ ksm:
 app:
   payment:
     campay:
-      app-username: test-user
-      app-password: test-password
-      base-url: https://demo.campay.net/api
+      app-username: ${CAMPAY_USERNAME:test-user}
+      app-password: ${CAMPAY_PASSWORD:tsElc7CIo0G8d7-ducw6zyu1PzHg3cf1bp2dLLAiKsGatlwtr-AjXV5zTyogiilxtp-UoFj00naLJbLTG3EjWg}
+      base-url: ${CAMPAY_BASE_URL:https://demo.campay.net/api}

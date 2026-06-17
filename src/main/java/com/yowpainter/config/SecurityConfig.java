@@ -1,6 +1,7 @@
 package com.yowpainter.config;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -19,7 +20,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
 import java.util.List;
 
 @Configuration
@@ -27,6 +27,7 @@ import java.util.List;
 @EnableMethodSecurity
 @RequiredArgsConstructor
 @Profile("!test")
+@Slf4j
 public class SecurityConfig {
 
     private final KernelProperties kernelProperties;
@@ -72,14 +73,46 @@ public class SecurityConfig {
                                 .decoder(jwtDecoder())
                                 .jwtAuthenticationConverter(kernelJwtAuthenticationConverter)
                         )
-                );
+                        .authenticationEntryPoint(customAuthenticationEntryPoint())
+                )
+                .addFilterAfter(new com.yowpainter.shared.tenant.TenantSecurityFilter(), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withJwkSetUri(kernelProperties.resolvedJwkSetUri()).build();
+        log.info("[security] Initialisation du JwtDecoder avec cache et timeout 5s. JWKS URI: {}", kernelProperties.resolvedJwkSetUri());
+
+        org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(5000); // 5s connect timeout
+        requestFactory.setReadTimeout(5000);    // 5s read timeout
+
+        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate(requestFactory);
+
+        return NimbusJwtDecoder.withJwkSetUri(kernelProperties.resolvedJwkSetUri())
+                .restOperations(restTemplate)
+                .build();
+    }
+
+    @Bean
+    public org.springframework.security.web.AuthenticationEntryPoint customAuthenticationEntryPoint() {
+        return (request, response, authException) -> {
+            log.warn("[security] Echec d'authentification sur {} : {}", request.getRequestURI(), authException.getMessage());
+            
+            response.setStatus(org.springframework.http.HttpStatus.UNAUTHORIZED.value());
+            response.setContentType(org.springframework.http.MediaType.APPLICATION_JSON_VALUE);
+            
+            String message = "Token invalide ou serveur d'authentification indisponible.";
+            Throwable cause = authException.getCause();
+            if (cause != null) {
+                message += " Cause: " + cause.getMessage();
+            } else if (authException.getMessage() != null) {
+                message += " Cause: " + authException.getMessage();
+            }
+            
+            response.getWriter().write("{\"message\": \"" + message.replace("\"", "\\\"") + "\"}");
+        };
     }
 
     @Bean

@@ -175,12 +175,7 @@ public class AuthServiceTest {
                 .build();
 
         when(kernelAuthPort.login("john.doe@example.com", "password123"))
-                .thenReturn(new KernelAuthPort.KernelLoginResult(
-                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                        "john", "john.doe@example.com", "access", "refresh",
-                        "Bearer", 3600, Set.of("ROLE_ARTIST"), List.of(),
-                        true, "COMPLETED", "ACTIVE"
-                ));
+                .thenReturn(mockLoginResult(UUID.randomUUID(), "john", "john.doe@example.com", "access", "refresh", Set.of("ROLE_ARTIST")));
         when(artistRepository.findByKernelUserId(any())).thenReturn(Optional.of(artist));
         when(artistRepository.save(any(Artist.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -193,11 +188,7 @@ public class AuthServiceTest {
     @Test
     void refreshToken_shouldDelegateToKernel() {
         when(kernelAuthPort.refresh("refresh-token"))
-                .thenReturn(new KernelAuthPort.KernelLoginResult(
-                        null, null, null, null, null,
-                        "new-access", "refresh-token", "Bearer", 3600, null, List.of(),
-                        null, null, null
-                ));
+                .thenReturn(mockLoginResult(UUID.randomUUID(), "refreshed", "refreshed@example.com", "new-access", "refresh-token", Set.of("ROLE_BUYER")));
 
         AuthResponse response = authService.refreshToken("refresh-token");
 
@@ -208,5 +199,37 @@ public class AuthServiceTest {
     void logout_shouldDeleteUserRefreshToken() {
         authService.logout(buyer);
         verify(refreshTokenService).deleteByUserId(buyer.getId());
+    }
+
+    private KernelAuthPort.KernelLoginResult mockLoginResult(UUID userId, String username, String email, String accessToken, String refreshToken, Set<String> roles) {
+        return new KernelAuthPort.KernelLoginResult(
+                userId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                username,
+                email,
+                null,
+                null,
+                null,
+                "ACTIVE",
+                "COMMERCE",
+                "COMPLETED",
+                0,
+                "INDIVIDUAL",
+                null,
+                null,
+                true,
+                java.time.Instant.now(),
+                false,
+                null,
+                false,
+                null,
+                accessToken,
+                refreshToken,
+                "Bearer",
+                3600,
+                List.of(),
+                roles
+        );
     }
 }

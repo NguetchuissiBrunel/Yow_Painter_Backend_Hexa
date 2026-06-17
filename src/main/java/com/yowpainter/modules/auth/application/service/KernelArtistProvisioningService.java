@@ -5,6 +5,7 @@ import com.yowpainter.modules.artist.domain.model.Artist;
 import com.yowpainter.modules.auth.application.port.out.KernelAuthPort;
 import com.yowpainter.shared.kernel.KernelBootstrapAdminSession;
 import com.yowpainter.shared.kernel.KernelClientException;
+import com.yowpainter.shared.kernel.KernelMfaRequiredException;
 import com.yowpainter.shared.kernel.port.KernelActorPort;
 import com.yowpainter.shared.kernel.port.KernelAdministrationPort;
 import com.yowpainter.shared.kernel.port.KernelOrganizationPort;
@@ -43,7 +44,7 @@ public class KernelArtistProvisioningService {
         String adminToken = runStep("BOOTSTRAP_ADMIN_LOGIN", artistEmail,
                 bootstrapAdminSession::requireAccessToken);
 
-        UUID organizationId = resolveOrganizationId(artist, confirmed, businessActorId, adminToken);
+        UUID organizationId = resolveOrganizationId(artist, confirmed, businessActorId, userToken);
 
         runStepVoid("ORGANIZATION_APPROVE (POST /api/organizations/{id}/approve)", artistEmail, () ->
                 kernelOrganizationPort.approveOrganization(organizationId, AUTO_APPROVAL_REASON, adminToken)
@@ -134,11 +135,23 @@ public class KernelArtistProvisioningService {
             return artist.getOrganizationId();
         }
 
+        java.util.Optional<UUID> existingOrgId = kernelOrganizationPort.findOrganizationIdByCode(artist.getSlug(), adminToken);
+        if (existingOrgId.isPresent()) {
+            log.info(
+                    "[provision] [PROVISION_RESUME] ORGANIZATION_CREATE ignore — organization deja creee sur le Kernel ({}) pour {}",
+                    existingOrgId.get(),
+                    artist.getEmail()
+            );
+            return existingOrgId.get();
+        }
+
         return runStep(
                 "ORGANIZATION_CREATE (POST /api/organizations, code=" + artist.getSlug()
                         + ", token=bootstrap-admin)",
                 artist.getEmail(),
                 () -> {
+                    bootstrapAdminSession.inspectAndVerifyToken(adminToken, "organizations:write");
+
                     KernelOrganizationPort.OrganizationView organization = kernelOrganizationPort.createOrganization(
                             new KernelOrganizationPort.CreateOrganizationCommand(
                                     businessActorId,
@@ -220,7 +233,7 @@ public class KernelArtistProvisioningService {
             Artist artist,
             KernelAuthPort.KernelLoginResult confirmed,
             UUID businessActorId,
-            String adminToken
+            String userToken
     ) {
         if (artist.getOrganizationId() != null) {
             log.info(
@@ -242,9 +255,19 @@ public class KernelArtistProvisioningService {
 
         return runStep(
                 "ORGANIZATION_CREATE (POST /api/organizations, code=" + artist.getSlug()
-                        + ", token=bootstrap-admin)",
+                        + ", token=user-token)",
                 artist.getEmail(),
                 () -> {
+                    java.util.Optional<UUID> existingOrgId = kernelOrganizationPort.findOrganizationIdByCode(artist.getSlug(), userToken);
+                    if (existingOrgId.isPresent()) {
+                        log.info(
+                                "[provision] ORGANIZATION_CREATE ignore — organization deja creee sur le Kernel ({}) pour {}",
+                                existingOrgId.get(),
+                                artist.getEmail()
+                        );
+                        return existingOrgId.get();
+                    }
+
                     KernelOrganizationPort.OrganizationView organization = kernelOrganizationPort.createOrganization(
                             new KernelOrganizationPort.CreateOrganizationCommand(
                                     businessActorId,
@@ -253,7 +276,7 @@ public class KernelArtistProvisioningService {
                                     artist.getArtistName(),
                                     artist.getEmail()
                             ),
-                            adminToken
+                            userToken
                     );
                     log.info("[provision] ORGANIZATION_CREATE — organizationId={}", organization.id());
                     return organization.id();
@@ -304,6 +327,10 @@ public class KernelArtistProvisioningService {
     }
 
     private void logProvisioningFailure(String step, String artistEmail, RuntimeException ex) {
+        if (ex instanceof KernelMfaRequiredException) {
+            log.warn("[provision] {} — MFA_REQUIRED (artiste={})", step, artistEmail);
+            return;
+        }
         if (ex instanceof KernelClientException kernelEx) {
             Integer httpStatus = kernelEx.statusCode() != null ? kernelEx.statusCode().value() : null;
             log.warn(

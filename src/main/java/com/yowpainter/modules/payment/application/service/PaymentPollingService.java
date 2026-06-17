@@ -20,25 +20,45 @@ public class PaymentPollingService {
     private final PaymentRepositoryPort paymentRepository;
     private final PaymentService paymentService;
     private final CampayClient campayClient;
+    private final com.yowpainter.modules.artist.domain.port.out.ArtistRepositoryPort artistRepository;
 
     /**
      * S'exécute toutes les 10 minutes pour vérifier les paiements en attente.
      */
     @Scheduled(fixedDelay = 600000) // 10 minutes
     public void pollPendingPayments() {
-        log.info("Starting payment polling for PENDING transactions...");
+        log.info("Starting payment polling for PENDING transactions across tenants...");
         
-        // On récupère les paiements PENDING créés il y a plus de 5 minutes
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(5);
-        List<Payment> pendingPayments = paymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING, cutoff);
-        
-        log.info("Found {} pending payments to check", pendingPayments.size());
+        List<com.yowpainter.modules.artist.domain.model.Artist> activeArtists;
+        try {
+            activeArtists = artistRepository.findByStatus("ACTIVE");
+        } catch (Exception e) {
+            log.error("Failed to query active artists for payment polling", e);
+            return;
+        }
 
-        for (Payment payment : pendingPayments) {
+        for (com.yowpainter.modules.artist.domain.model.Artist artist : activeArtists) {
+            if (artist.getOrganizationId() == null) {
+                continue;
+            }
             try {
-                checkAndUpdatePaymentStatus(payment);
+                com.yowpainter.shared.context.OrganizationContext.setOrganizationId(artist.getOrganizationId());
+                LocalDateTime cutoff = LocalDateTime.now().minusMinutes(5);
+                List<Payment> pendingPayments = paymentRepository.findByStatusAndCreatedAtBefore(PaymentStatus.PENDING, cutoff);
+                if (!pendingPayments.isEmpty()) {
+                    log.info("Found {} pending payments for tenant {}", pendingPayments.size(), artist.getOrganizationId());
+                    for (Payment payment : pendingPayments) {
+                        try {
+                            checkAndUpdatePaymentStatus(payment);
+                        } catch (Exception e) {
+                            log.error("Failed to update status for payment reference: {}", payment.getReferenceId(), e);
+                        }
+                    }
+                }
             } catch (Exception e) {
-                log.error("Failed to update status for payment reference: {}", payment.getReferenceId(), e);
+                log.error("Failed to poll payments for tenant {}", artist.getOrganizationId(), e);
+            } finally {
+                com.yowpainter.shared.context.OrganizationContext.clear();
             }
         }
     }

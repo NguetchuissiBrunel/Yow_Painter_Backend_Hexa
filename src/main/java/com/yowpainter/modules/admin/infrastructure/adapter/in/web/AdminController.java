@@ -1,6 +1,8 @@
 package com.yowpainter.modules.admin.infrastructure.adapter.in.web;
 
 import com.yowpainter.modules.admin.application.service.ArtistApprovalService;
+import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.ApproveArtistMfaRequest;
+import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.ApproveArtistMfaResponse;
 import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.ApproveArtistRequest;
 import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.ArtistApprovalResponse;
 import com.yowpainter.modules.admin.infrastructure.adapter.in.web.dto.PendingArtistResponse;
@@ -37,14 +39,33 @@ public class AdminController {
 
     @PostMapping("/artists/{id}/approve")
     @Operation(summary = "Approuver un artiste et provisionner son espace Kernel")
-    public ResponseEntity<ArtistApprovalResponse> approveArtist(
+    public ResponseEntity<ApproveArtistMfaResponse> approveArtist(
             @PathVariable UUID id,
             @RequestBody(required = false) ApproveArtistRequest request
     ) {
         try {
             return ResponseEntity.ok(artistApprovalService.approveArtist(id, request));
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.badRequest().body(ApproveArtistMfaResponse.builder()
+                    .status("ERROR")
+                    .message(ex.getMessage())
+                    .build());
+        }
+    }
+
+    @PostMapping("/artists/{id}/approve/confirm")
+    @Operation(summary = "Confirmer le code MFA pour finaliser l'approbation de l'artiste")
+    public ResponseEntity<ApproveArtistMfaResponse> confirmApproveArtist(
+            @PathVariable UUID id,
+            @RequestBody ApproveArtistMfaRequest request
+    ) {
+        try {
+            return ResponseEntity.ok(artistApprovalService.confirmApproveArtist(id, request));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ApproveArtistMfaResponse.builder()
+                    .status("ERROR")
+                    .message(ex.getMessage())
+                    .build());
         }
     }
 

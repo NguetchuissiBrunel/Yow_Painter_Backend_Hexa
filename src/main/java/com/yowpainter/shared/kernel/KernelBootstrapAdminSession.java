@@ -45,6 +45,10 @@ public class KernelBootstrapAdminSession {
         cachedToken = null;
     }
 
+    public String getBootstrapAdminAccessToken() {
+        return requireAccessToken();
+    }
+
     public String requireAccessToken() {
         return requireAccessToken(null);
     }
@@ -54,11 +58,13 @@ public class KernelBootstrapAdminSession {
             invalidate();
         }
 
+        // 1. Si un token bootstrap/technique valide est déjà en cache, l'utiliser en priorité absolue !
         CachedToken current = cachedToken;
         if (current != null && current.isValid()) {
             return current.accessToken();
         }
 
+        // 2. Utiliser le cache synchronisé ou tenter le login bootstrap
         synchronized (this) {
             current = cachedToken;
             if (current != null && current.isValid()) {
@@ -98,6 +104,27 @@ public class KernelBootstrapAdminSession {
         return session;
     }
 
+    public void confirmMfaLogin(String mfaToken, String code) {
+        log.info("[provision] MFA_CONFIRM avec le token: {}...", mfaToken);
+        try {
+            KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
+                    "/api/auth/login/mfa/confirm",
+                    new KernelConfirmMfaLoginRequestDto(mfaToken, code),
+                    KernelAuthLoginPayloadDto.class
+            );
+            if (confirmed.accessToken() == null || confirmed.accessToken().isBlank()) {
+                throw new IllegalStateException("MFA_FAILED : Le token d'accès n'a pas pu être récupéré après confirmation MFA.");
+            }
+            synchronized (this) {
+                cachedToken = CachedToken.of(confirmed.accessToken(), confirmed.expiresInSeconds());
+            }
+            log.info("[provision] MFA_SUCCESS. Token administrateur mis en cache.");
+        } catch (KernelClientException ex) {
+            log.error("[provision] MFA_FAILED : {}", ex.getMessage());
+            throw ex;
+        }
+    }
+
     private CachedToken loginWithOptionalMfa(String username, String password, String mfaCode) {
         KernelAuthLoginPayloadDto login = kernelHttpClient.postBootstrap(
                 "/api/auth/login",
@@ -109,26 +136,40 @@ public class KernelBootstrapAdminSession {
             return CachedToken.of(login.accessToken(), login.expiresInSeconds());
         }
 
-        if (login.mfaToken() != null && login.codePreview() != null) {
-            KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
-                    "/api/auth/login/mfa/confirm",
-                    new KernelConfirmMfaLoginRequestDto(login.mfaToken(), login.codePreview()),
-                    KernelAuthLoginPayloadDto.class
-            );
-            if (confirmed.accessToken() != null && !confirmed.accessToken().isBlank()) {
-                return CachedToken.of(confirmed.accessToken(), confirmed.expiresInSeconds());
+        // Si MFA requis, lever l'exception avec le token MFA
+        if (login.mfaToken() != null && !login.mfaToken().isBlank()) {
+            log.info("[provision] MFA_REQUIRED détecté (mfaToken={})", login.mfaToken());
+            if (mfaCode != null && !mfaCode.isBlank()) {
+                // Tenter de confirmer avec le code fourni
+                try {
+                    KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
+                            "/api/auth/login/mfa/confirm",
+                            new KernelConfirmMfaLoginRequestDto(login.mfaToken(), mfaCode),
+                            KernelAuthLoginPayloadDto.class
+                    );
+                    if (confirmed.accessToken() != null && !confirmed.accessToken().isBlank()) {
+                        return CachedToken.of(confirmed.accessToken(), confirmed.expiresInSeconds());
+                    }
+                } catch (KernelClientException ex) {
+                    log.error("[provision] Erreur lors de la confirmation MFA : {}", ex.getMessage());
+                    throw ex;
+                }
+            } else if (login.codePreview() != null && !login.codePreview().isBlank()) {
+                // Mode developpement/sandbox avec codePreview (si disponible)
+                try {
+                    KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
+                            "/api/auth/login/mfa/confirm",
+                            new KernelConfirmMfaLoginRequestDto(login.mfaToken(), login.codePreview()),
+                            KernelAuthLoginPayloadDto.class
+                    );
+                    if (confirmed.accessToken() != null && !confirmed.accessToken().isBlank()) {
+                        return CachedToken.of(confirmed.accessToken(), confirmed.expiresInSeconds());
+                    }
+                } catch (Exception ex) {
+                    log.debug("Confirmation via codePreview echouee, envoi du challenge MFA requis: {}", ex.getMessage());
+                }
             }
-        }
-
-        if (login.mfaToken() != null && mfaCode != null && !mfaCode.isBlank()) {
-            KernelAuthLoginPayloadDto confirmed = kernelHttpClient.postBootstrap(
-                    "/api/auth/login/mfa/confirm",
-                    new KernelConfirmMfaLoginRequestDto(login.mfaToken(), mfaCode),
-                    KernelAuthLoginPayloadDto.class
-            );
-            if (confirmed.accessToken() != null && !confirmed.accessToken().isBlank()) {
-                return CachedToken.of(confirmed.accessToken(), confirmed.expiresInSeconds());
-            }
+            throw new KernelMfaRequiredException(login.mfaToken());
         }
 
         throw new IllegalStateException(
@@ -195,6 +236,77 @@ public class KernelBootstrapAdminSession {
         } catch (Exception ex) {
             log.warn("Impossible de lire le claim JWT {}: {}", claimName, ex.getMessage());
             return false;
+        }
+    }
+
+    public record TokenDetails(
+        java.util.List<String> roles,
+        java.util.List<String> permissions,
+        boolean adm
+    ) {}
+
+    public TokenDetails parseTokenDetails(String token) {
+        JwtTokenParser.JwtTokenInfo info = JwtTokenParser.parseToken(token);
+        return new TokenDetails(info.roles(), info.permissions(), info.adm());
+    }
+
+    public void inspectAndVerifyToken(String token, String requiredPermission) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Token cannot be null or empty");
+        }
+        String[] parts = token.split("\\.");
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("Invalid JWT token format");
+        }
+        try {
+            byte[] payload = Base64.getUrlDecoder().decode(parts[1]);
+            JsonNode node = objectMapper.readTree(payload);
+            
+            // Masked token for logging
+            String maskedToken = token.substring(0, Math.min(token.length(), 20)) + "..." + token.substring(Math.max(0, token.length() - 20));
+            log.info("[JWT-AUDIT] Token utilise (masque): {}", maskedToken);
+            log.info("[JWT-AUDIT] Token utilise (complet): {}", token);
+            log.info("[JWT-AUDIT] Claims JWT de-codes: {}", node.toString());
+            
+            TokenDetails details = parseTokenDetails(token);
+            log.info("[JWT-AUDIT] Valeur du claim \"adm\": {}", details.adm());
+            log.info("[JWT-AUDIT] Roles contenus dans le token: {}", details.roles());
+            log.info("[JWT-AUDIT] Permissions contenues dans le token: {}", details.permissions());
+            
+            // Verification of roles/permissions according to required spec
+            boolean hasRolePlatformAdmin = details.roles().contains("ROLE_PLATFORM_ADMIN");
+            boolean hasRoleSuperAdmin = details.roles().contains("ROLE_SUPER_ADMIN");
+            boolean hasOrgCreate = details.permissions().contains("ORGANIZATION_CREATE");
+            boolean hasOrgWrite = details.permissions().contains("ORGANIZATION_WRITE") || details.permissions().contains("organizations:write");
+            
+            log.info("[JWT-AUDIT] Verification des privileges attendus : ROLE_PLATFORM_ADMIN={}, ROLE_SUPER_ADMIN={}, ORGANIZATION_CREATE={}, ORGANIZATION_WRITE={}",
+                    hasRolePlatformAdmin, hasRoleSuperAdmin, hasOrgCreate, hasOrgWrite);
+            
+            // Combine all roles & permissions to verify the specific requiredPermission
+            java.util.List<String> allPermissions = new java.util.ArrayList<>();
+            allPermissions.addAll(details.roles());
+            allPermissions.addAll(details.permissions());
+            
+            boolean hasPermission = false;
+            for (String perm : allPermissions) {
+                String normalized = perm.split("#")[0]; // remove scoped suffix
+                if (normalized.equals(requiredPermission)) {
+                    hasPermission = true;
+                    break;
+                }
+            }
+            
+            if (!hasPermission) {
+                log.error("[JWT-AUDIT] Echec verification: Permission manquante: {}", requiredPermission);
+                throw new KernelPermissionDeniedException(requiredPermission);
+            }
+            log.info("[JWT-AUDIT] Verification de la permission '{}' reussie.", requiredPermission);
+            
+        } catch (KernelPermissionDeniedException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("[JWT-AUDIT] Erreur lors du de-codage et de la verification du token admin: {}", ex.getMessage());
+            throw new IllegalStateException("Impossible de valider les permissions du token administrateur", ex);
         }
     }
 

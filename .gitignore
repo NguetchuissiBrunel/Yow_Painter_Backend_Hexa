@@ -55,3 +55,9 @@ desktop.ini
 *.sql
 *.sqlite
 data/
+
+# REPORTS
+RAPPORT-organisation-workflows-api.pdf
+
+# WORKFLOWS
+workflows_text.txt

@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8080}
+  port: ${PORT:8090}
   error:
     include-message: always
 
@@ -13,88 +13,122 @@ spring:
       max-request-size: 12MB
 
   datasource:
-    # Connexion à la base de données sur Render.com
-    # Pour le dev local, si l'hôte interne ne marche pas, tu devras utiliser l'External Database URL
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:dpg-d83kv9egvqtc73f3nlq0-a.oregon-postgres.render.com}:${DB_PORT:5432}/${DB_NAME:yowbackend}}
-    username: ${DB_USER:yowbackend_user}
-    password: ${DB_PASS:VNtMmiYQqBU18MrItVoJ1AU7fSCQX2vc}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
-    # Propriete importante pour que Hibernate recupere correctement le metadata multi-schema
+
     hikari:
       maximum-pool-size: 20
+      minimum-idle: 5
       schema: public
+      connection-timeout: 30000
 
   jpa:
     hibernate:
-      ddl-auto: update # Temporairement passé en update pour appliquer l'ajout de la colonne 'bio'
+      ddl-auto: none
+
     show-sql: true
+
     properties:
       hibernate:
-        format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
 
   flyway:
     enabled: true
-    schemas: public
-    locations: classpath:db/migration/public
     baseline-on-migrate: true
-    out-of-order: true
-    # Permet de reparer automatiquement en cas de mismatch de checksum si supporté par la version
-    # Sinon forcera au moins l'execution des migrations manquantes
     validate-on-migrate: true
+    out-of-order: true
 
-  # Configuration de l'envoi d'emails (Spring Boot 4)
+    schemas:
+      - public
+
+    locations:
+      - classpath:db/migration/public
+
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:nguetchuissibrunel@gmail.com}
-    password: ${MAIL_PASSWORD:ztzjsteckxohwhlm}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+
     properties:
       mail:
         smtp:
           auth: true
+
           starttls:
             enable: true
 
-# Kernel RT-Comops (obligatoire — backend consommateur hexagonal)
+# ======================================================
+# KERNEL
+# ======================================================
+
 ksm:
   kernel:
-    base-url: ${KSM_KERNEL_BASE_URL:http://localhost:8080}
-    client-id: ${KSM_KERNEL_CLIENT_ID:yowpainter-backend}
-    api-key: ${KSM_KERNEL_API_KEY:}
-    tenant-id: ${KSM_KERNEL_TENANT_ID:}
+    base-url: ${KSM_KERNEL_BASE_URL}
+
+    client-id: ${KSM_KERNEL_CLIENT_ID}
+
+    api-key: ${KSM_KERNEL_API_KEY}
+
+    tenant-id: ${KSM_KERNEL_TENANT_ID}
+
     jwk-set-uri: ${KSM_KERNEL_JWK_SET_URI:}
+
     default-plan-code: ${KSM_KERNEL_DEFAULT_PLAN_CODE:COMMERCE}
+
     default-currency: ${KSM_KERNEL_DEFAULT_CURRENCY:XAF}
-    bootstrap-admin-username: ${KSM_KERNEL_BOOTSTRAP_ADMIN_USERNAME:}
-    bootstrap-admin-password: ${KSM_KERNEL_BOOTSTRAP_ADMIN_PASSWORD:}
-    bootstrap-client-id: ${KSM_KERNEL_BOOTSTRAP_CLIENT_ID:}
-    bootstrap-api-key: ${KSM_KERNEL_BOOTSTRAP_API_KEY:}
+
     signup-platform-organization-code: ${KSM_KERNEL_SIGNUP_PLATFORM_ORG_CODE:yow-painter}
+
     auto-provision-artists: ${KSM_KERNEL_AUTO_PROVISION_ARTISTS:false}
+
+    bootstrap-admin-username: ${KSM_KERNEL_BOOTSTRAP_ADMIN_USERNAME:}
+
+    bootstrap-admin-password: ${KSM_KERNEL_BOOTSTRAP_ADMIN_PASSWORD:}
+
+    bootstrap-client-id: ${KSM_KERNEL_BOOTSTRAP_CLIENT_ID:}
+
+    bootstrap-api-key: ${KSM_KERNEL_BOOTSTRAP_API_KEY:}
+
     legacy-migration:
       enabled: ${KSM_KERNEL_LEGACY_MIGRATION_ENABLED:false}
+
     kafka:
       enabled: ${KSM_KERNEL_KAFKA_ENABLED:false}
       bootstrap-servers: ${KSM_KERNEL_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
       topic: ${KSM_KERNEL_KAFKA_TOPIC:iwm.events.business}
       group-id: ${KSM_KERNEL_KAFKA_GROUP_ID:yowpainter-backend}
 
-# Custom App Properties
+# ======================================================
+# APPLICATION
+# ======================================================
+
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
   payment:
     campay:
-      app-username: ${CAMPAY_USERNAME:Key6ZTdXKKxL7Ztlxr-PCH_IrgX15kgZU8ePwmE7QkYQa1uXxcPLxiAQ90Tf2pShnpRmNohOiapkZYDV-Ai0YQ}
+      app-username: ${CAMPAY_USERNAME:test-user}
+
       app-password: ${CAMPAY_PASSWORD:tsElc7CIo0G8d7-ducw6zyu1PzHg3cf1bp2dLLAiKsGatlwtr-AjXV5zTyogiilxtp-UoFj00naLJbLTG3EjWg}
+
       base-url: ${CAMPAY_BASE_URL:https://demo.campay.net/api}
+
       token-url: /token/
       collect-url: /collect/
       transaction-url: /transaction/
       withdraw-url: /withdraw/
 
+# ======================================================
+# SWAGGER
+# ======================================================
+
 springdoc:
   api-docs:
     path: /api-docs
+
   swagger-ui:
     path: /swagger-ui.html

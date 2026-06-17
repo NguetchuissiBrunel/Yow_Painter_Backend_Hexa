@@ -6,16 +6,13 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
-public class KernelClientConfig {
+public class RestClientConfig {
 
     @Bean
-    RestClient kernelRestClient(KernelProperties properties) {
+    public RestClient.Builder restClientBuilder() {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(10000); // 10s connect timeout
+        requestFactory.setConnectTimeout(10000); // 10s connection timeout
         requestFactory.setReadTimeout(10000);    // 10s read timeout
-        return RestClient.builder()
-                .baseUrl(properties.baseUrl())
-                .requestFactory(requestFactory)
-                .build();
+        return RestClient.builder().requestFactory(requestFactory);
     }
 }

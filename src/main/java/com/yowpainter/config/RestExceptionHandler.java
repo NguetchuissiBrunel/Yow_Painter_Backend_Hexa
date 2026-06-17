@@ -28,6 +28,11 @@ public class RestExceptionHandler {
         return ResponseEntity.status(status).body(Map.of("message", message));
     }
 
+    @ExceptionHandler(com.yowpainter.shared.kernel.KernelPermissionDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleKernelPermissionDenied(com.yowpainter.shared.kernel.KernelPermissionDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler({IllegalStateException.class, KernelClientException.class})
     public ResponseEntity<Map<String, String>> handleKernelConfiguration(RuntimeException ex) {
         String message = ex.getMessage() != null ? ex.getMessage() : "Configuration kernel invalide";

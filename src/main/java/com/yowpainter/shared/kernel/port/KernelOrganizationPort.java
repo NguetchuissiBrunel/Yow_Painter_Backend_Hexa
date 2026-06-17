@@ -6,6 +6,8 @@ public interface KernelOrganizationPort {
 
     OrganizationView createOrganization(CreateOrganizationCommand command, String accessToken);
 
+    java.util.Optional<java.util.UUID> findOrganizationIdByCode(String code, String accessToken);
+
     void approveOrganization(UUID organizationId, String reason, String adminAccessToken);
 
     void applyCommercialPlan(UUID organizationId, String planCode, String accessToken);
