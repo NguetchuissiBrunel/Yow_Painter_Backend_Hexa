@@ -85,6 +85,7 @@ public class KernelArtistRegistrationService {
                     .kernelActorId(signup.actorId())
                     .organizationId(organizationId)
                     .tenantId(tenantId)
+                    .profilePictureUrl(request.getImageUrl())
                     .build();
 
             artistRepository.save(artist);

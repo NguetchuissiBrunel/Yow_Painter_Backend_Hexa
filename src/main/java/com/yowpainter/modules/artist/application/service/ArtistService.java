@@ -102,8 +102,8 @@ public class ArtistService {
                 .artistName(artist.getArtistName())
                 .slug(artist.getSlug())
                 .bio(artist.getBio())
-                .profilePictureUrl(artist.getProfilePictureUrl())
-                .bannerUrl(artist.getBannerUrl())
+                .profilePictureUrl(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(artist.getProfilePictureUrl()))
+                .bannerUrl(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(artist.getBannerUrl()))
                 .location(artist.getLocation())
                 .status(artist.getStatus())
                 .build();

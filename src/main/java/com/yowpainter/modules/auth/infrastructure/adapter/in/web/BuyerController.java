@@ -53,7 +53,7 @@ public class BuyerController {
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .email(user.getEmail())
-                .profilePictureUrl(user.getProfilePictureUrl())
+                .profilePictureUrl(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(user.getProfilePictureUrl()))
                 .bio(user.getBio())
                 .role(user.getRole().name())
                 .build();

@@ -154,6 +154,23 @@ public class KernelHttpClient {
         return parseResponse(response.getBody(), responseType);
     }
 
+    public ResponseEntity<byte[]> download(String path, UUID organizationId) {
+        logRequest("GET", path, null, organizationId);
+        return restClient.get()
+                .uri(path)
+                .headers(headers -> applyServerHeaders(headers, organizationId))
+                .retrieve()
+                .onStatus(status -> status.isError(), (request, clientResponse) -> {
+                    throw toKernelException(path, clientResponse);
+                })
+                .toEntity(byte[].class);
+    }
+
+    public ResponseEntity<byte[]> download(String path, UUID organizationId, String accessToken) {
+        return withAccessToken(accessToken, () -> download(path, organizationId));
+    }
+
+
     public void postVoid(String path, Object body, UUID organizationId) {
         logRequest("POST", path, body, organizationId);
         RestClient.RequestBodySpec spec = restClient.post()

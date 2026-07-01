@@ -13,6 +13,9 @@ import com.yowpainter.shared.security.AuthenticatedUserResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.ProfileImageUploadResponse;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -40,6 +43,14 @@ public class AuthController {
     @Operation(summary = "Lister les roles disponibles pour l'inscription")
     public ResponseEntity<List<String>> getRoles() {
         return ResponseEntity.ok(authService.getAvailableRoles());
+    }
+
+    @PostMapping(value = "/register/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Uploader un avatar temporaire avant inscription (sans authentification)")
+    public ResponseEntity<ProfileImageUploadResponse> uploadRegistrationAvatar(
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(authService.uploadRegistrationAvatar(file));
     }
 
     @PostMapping("/register")

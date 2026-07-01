@@ -383,6 +383,15 @@ public class TestKernelConfiguration {
                         "http://localhost/files/" + UUID.randomUUID()
                 );
             }
+
+            @Override
+            public DownloadFileView download(UUID fileId, String accessToken) {
+                return new DownloadFileView(
+                        "mock-file-content".getBytes(StandardCharsets.UTF_8),
+                        "text/plain",
+                        "attachment; filename=\"mock.txt\""
+                );
+            }
         };
     }
 }

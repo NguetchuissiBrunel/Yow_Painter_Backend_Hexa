@@ -46,6 +46,7 @@ public class PublicAwareBearerTokenResolver implements BearerTokenResolver {
                 || path.startsWith("/ws/")
                 || path.startsWith("/api/chat/")
                 || path.startsWith("/api/messages/")
-                || path.equals("/api/payment/callback");
+                || path.equals("/api/payment/callback")
+                || (path.startsWith("/api/files/") && !"POST".equalsIgnoreCase(request.getMethod()));
     }
 }

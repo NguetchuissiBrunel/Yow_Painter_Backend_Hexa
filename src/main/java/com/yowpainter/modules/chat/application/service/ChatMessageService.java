@@ -68,7 +68,7 @@ public class ChatMessageService {
         return com.yowpainter.modules.chat.infrastructure.adapter.in.web.dto.UserChatDto.builder()
                 .id(user.getId())
                 .name(name)
-                .profilePictureUrl(user.getProfilePictureUrl())
+                .profilePictureUrl(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(user.getProfilePictureUrl()))
                 .role(user.getRole().name())
                 .build();
     }

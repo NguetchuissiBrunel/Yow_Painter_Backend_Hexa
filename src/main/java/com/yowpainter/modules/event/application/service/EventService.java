@@ -241,7 +241,7 @@ public class EventService {
                 .artistId(event.getArtistId())
                 .name(event.getName())
                 .description(event.getDescription())
-                .posterUrl(event.getPosterUrl())
+                .posterUrl(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(event.getPosterUrl()))
                 .startDateTime(event.getStartDateTime())
                 .endDateTime(event.getEndDateTime())
                 .location(event.getLocation())

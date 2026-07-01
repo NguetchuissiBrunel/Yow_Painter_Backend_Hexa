@@ -37,4 +37,16 @@ public class UserProfileController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(userProfileImageService.uploadProfilePicture(user, file, accessToken));
     }
+
+    @PostMapping(value = "/files/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Uploader un fichier (affiche, image actu, etc.) sous le contexte de l'utilisateur connecté")
+    public ResponseEntity<ProfileImageUploadResponse> uploadFile(
+            Authentication authentication,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "documentType", defaultValue = "GENERAL") String documentType) {
+        AppUser user = authenticatedUserResolver.requireUser(authentication);
+        String accessToken = KernelAccessTokenResolver.requireAccessToken(authentication);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(userProfileImageService.uploadFile(user, file, accessToken, documentType));
+    }
 }

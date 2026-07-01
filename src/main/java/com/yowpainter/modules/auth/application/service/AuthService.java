@@ -15,6 +15,10 @@ import com.yowpainter.modules.auth.domain.model.AppUser;
 import com.yowpainter.modules.auth.domain.model.UserRole;
 import com.yowpainter.modules.auth.domain.port.out.AppUserRepositoryPort;
 import com.yowpainter.shared.kernel.KernelClientException;
+import com.yowpainter.shared.kernel.KernelBootstrapAdminSession;
+import com.yowpainter.shared.kernel.port.KernelFilePort;
+import com.yowpainter.modules.auth.infrastructure.adapter.in.web.dto.ProfileImageUploadResponse;
+import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -35,6 +39,8 @@ public class AuthService {
     private final KernelArtistRegistrationService kernelArtistRegistrationService;
     private final KernelBuyerRegistrationService kernelBuyerRegistrationService;
     private final KernelAdminRegistrationService kernelAdminRegistrationService;
+    private final KernelBootstrapAdminSession kernelBootstrapAdminSession;
+    private final KernelFilePort kernelFilePort;
 
     public List<String> getAvailableRoles() {
         return List.of(UserRole.ROLE_ARTIST.name(), UserRole.ROLE_BUYER.name());
@@ -215,5 +221,39 @@ public class AuthService {
             return artistRepository.save(artist);
         }
         return userRepository.save(user);
+    }
+
+    public ProfileImageUploadResponse uploadRegistrationAvatar(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Fichier image requis");
+        }
+        try {
+            String fileName = file.getOriginalFilename();
+            if (fileName == null || fileName.isBlank()) {
+                fileName = "profile-picture.jpg";
+            }
+            String bootstrapAdminToken = kernelBootstrapAdminSession.getBootstrapAdminAccessToken();
+            KernelFilePort.FileView uploaded = kernelFilePort.upload(
+                    new KernelFilePort.UploadFileCommand(
+                            null,
+                            file.getBytes(),
+                            fileName,
+                            file.getContentType(),
+                            "PROFILE_PICTURE"
+                    ),
+                    bootstrapAdminToken
+            );
+            return ProfileImageUploadResponse.builder()
+                    .fileId(uploaded.id())
+                    .imageUrl(uploaded.downloadUrl())
+                    .build();
+        } catch (KernelClientException ex) {
+            throw new IllegalStateException(
+                    ex.getMessage() != null ? ex.getMessage() : "Echec upload photo de profil via le kernel (bootstrap)",
+                    ex
+            );
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Impossible de lire le fichier image", ex);
+        }
     }
 }

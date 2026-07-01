@@ -61,6 +61,7 @@ public class KernelBuyerRegistrationService {
                     .passwordHash(passwordEncoder.encode(KERNEL_MANAGED_PASSWORD))
                     .role(UserRole.ROLE_BUYER)
                     .kernelUserId(signup.userId())
+                    .profilePictureUrl(request.getImageUrl())
                     .build();
             userRepository.save(buyer);
 

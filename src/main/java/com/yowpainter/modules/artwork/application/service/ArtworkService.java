@@ -56,7 +56,7 @@ public class ArtworkService {
             );
             return ArtworkImageUploadResponse.builder()
                     .fileId(uploaded.id())
-                    .imageUrl(uploaded.downloadUrl())
+                    .imageUrl(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(uploaded.downloadUrl()))
                     .build();
         } catch (java.io.IOException ex) {
             throw new IllegalStateException("Impossible de lire le fichier image", ex);
@@ -314,7 +314,9 @@ public class ArtworkService {
                 .status(artwork.getStatus())
                 .viewCount(artwork.getViewCount())
                 .likeCount(artwork.getLikeCount())
-                .imageUrls(artwork.getImages().stream().map(ArtworkImage::getImageUrl).collect(Collectors.toList()))
+                .imageUrls(artwork.getImages().stream()
+                        .map(img -> com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(img.getImageUrl()))
+                        .collect(Collectors.toList()))
                 .publishedAt(artwork.getPublishedAt())
                 .createdAt(artwork.getCreatedAt())
                 .build();
@@ -324,7 +326,7 @@ public class ArtworkService {
         CommentResponse res = new CommentResponse();
         res.setId(comment.getId());
         res.setUserName(comment.getUser().getFirstName() + " " + comment.getUser().getLastName());
-        res.setUserAvatar(comment.getUser().getProfilePictureUrl());
+        res.setUserAvatar(com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(comment.getUser().getProfilePictureUrl()));
         res.setContent(comment.getContent());
         res.setCreatedAt(comment.getCreatedAt());
         return res;

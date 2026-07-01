@@ -21,7 +21,7 @@ final class KernelAuthMapper {
                 .email(loginResult.email())
                 .firstName(artist != null ? artist.getFirstName() : null)
                 .lastName(artist != null ? artist.getLastName() : null)
-                .imageUrl(artist != null ? artist.getProfilePictureUrl() : null)
+                .imageUrl(artist != null ? com.yowpainter.shared.utils.UrlSanitizer.sanitizeFileUrl(artist.getProfilePictureUrl()) : null)
                 .role(resolveRole(loginResult, artist))
                 .tenantId(loginResult.tenantId() != null ? loginResult.tenantId().toString() : null)
                 .artistName(artist != null ? artist.getArtistName() : null)

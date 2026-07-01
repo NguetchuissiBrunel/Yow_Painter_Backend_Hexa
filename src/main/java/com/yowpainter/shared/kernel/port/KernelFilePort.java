@@ -6,6 +6,8 @@ public interface KernelFilePort {
 
     FileView upload(UploadFileCommand command, String accessToken);
 
+    DownloadFileView download(UUID fileId, String accessToken);
+
     record UploadFileCommand(
             UUID organizationId,
             byte[] content,
@@ -20,6 +22,13 @@ public interface KernelFilePort {
             String fileName,
             String contentType,
             String downloadUrl
+    ) {
+    }
+
+    record DownloadFileView(
+            byte[] content,
+            String contentType,
+            String contentDisposition
     ) {
     }
 }

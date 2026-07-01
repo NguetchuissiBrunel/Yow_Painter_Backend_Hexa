@@ -182,3 +182,51 @@ Le backend gère et traduit précisément les codes d'erreur du Kernel dans le c
 *   **Destination de souscription :** `/user/queue/notifications`
 *   **Vérification sous-jacente :**
     1.  Lorsqu'une commande change de statut (ex: payée), une notification STOMP est envoyée au client WebSocket. Le client doit instantanément afficher le payload de notification.
+
+---
+
+## 3. Scénarios de Test pour la Récupération de Fichiers (BFF Proxy)
+
+Ces scénarios valident le bon fonctionnement de l'endpoint proxy `/api/files/{fileId}` et de son intégration sécurisée avec le Kernel Core.
+
+### Scénario 3.1 : Récupération d'une image existante (Succès)
+*   **Description :** Récupération réussie d'une image par un utilisateur authentifié ou anonyme.
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Headers attendus dans la réponse :**
+    - `Content-Type`: format MIME correct (ex: `image/jpeg` ou `image/png`)
+    - `Content-Length`: taille exacte en octets du fichier
+    - `Content-Disposition` (si disponible/nécessaire)
+*   **Statut HTTP attendu :** `200 OK`
+*   **Corps :** Flux binaire de l'image.
+
+### Scénario 3.2 : Récupération d'une image inexistante
+*   **Description :** Tentative de récupération d'un fichier avec un identifiant UUID non attribué ou inexistant.
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Statut HTTP attendu :** `404 Not Found` ou `400 Bad Request` (selon la réponse du Kernel).
+*   **Corps :** Message d'erreur standardisé indiquant que le fichier est introuvable.
+
+### Scénario 3.3 : Utilisateur non authentifié (Accès public)
+*   **Description :** Un utilisateur anonyme (sans header `Authorization`) demande à afficher une image.
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Comportement attendu :** Le BFF résout le token système (`KernelSystemUserTokenProvider`) pour s'authentifier de manière transparente auprès du Kernel et renvoie l'image sans bloquer l'utilisateur final.
+*   **Statut HTTP attendu :** `200 OK`
+
+### Scénario 3.4 : Accès refusé par le Kernel
+*   **Description :** Tentative d'accès à un fichier dont le droit de lecture est explicitement révoqué ou restreint au niveau du Kernel.
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Statut HTTP attendu :** `403 Forbidden` ou `401 Unauthorized` relayé proprement par le BFF.
+
+### Scénario 3.5 : Erreur interne du Kernel Core
+*   **Description :** Le Kernel Core rencontre une erreur interne lors du chargement ou du traitement du fichier.
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Statut HTTP attendu :** `502 Bad Gateway` ou `500 Internal Server Error` retourné par le BFF.
+
+### Scénario 3.6 : Timeout d'appel au Kernel
+*   **Description :** L'appel HTTP du BFF vers le Kernel Core dépasse le délai d'attente (timeout).
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Statut HTTP attendu :** `504 Gateway Timeout` ou `500 Internal Server Error`.
+
+### Scénario 3.7 : Erreur réseau / Perte de connexion avec le Kernel
+*   **Description :** Le Kernel Core est injoignable par le BFF (serveur éteint, coupure réseau).
+*   **Méthode / URL :** `GET /api/files/{fileId}`
+*   **Statut HTTP attendu :** `503 Service Unavailable` ou `500 Internal Server Error`.

@@ -62,7 +62,8 @@ public class SecurityConfig {
                                 "/ws/**",
                                 "/api/chat/**",
                                 "/api/messages/**",
-                                "/api/payment/callback"
+                                "/api/payment/callback",
+                                "/api/files/*"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -100,6 +101,14 @@ public class SecurityConfig {
         return (request, response, authException) -> {
             log.warn("[security] Echec d'authentification sur {} : {}", request.getRequestURI(), authException.getMessage());
             
+            String origin = request.getHeader("Origin");
+            if (origin != null) {
+                response.setHeader("Access-Control-Allow-Origin", origin);
+                response.setHeader("Access-Control-Allow-Credentials", "true");
+                response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+                response.setHeader("Access-Control-Allow-Headers", "*");
+            }
+            
             response.setStatus(org.springframework.http.HttpStatus.UNAUTHORIZED.value());
             response.setContentType(org.springframework.http.MediaType.APPLICATION_JSON_VALUE);
             
@@ -121,12 +130,40 @@ public class SecurityConfig {
     }
 
     @Bean
+    public org.springframework.boot.web.servlet.FilterRegistrationBean<org.springframework.web.filter.CorsFilter> corsFilterRegistrationBean() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOriginPatterns(List.of(
+                "http://localhost:3000",
+                "http://*.localhost:3000",
+                "http://localhost:3001",
+                "http://*.localhost:3001",
+                "https://yp-frontend.vercel.app",
+                "https://*.yp-frontend.vercel.app"
+        ));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Authorization", "X-Organization-Id"));
+        configuration.setAllowCredentials(true);
+        source.registerCorsConfiguration("/**", configuration);
+        
+        org.springframework.web.filter.CorsFilter corsFilter = new org.springframework.web.filter.CorsFilter(source);
+        org.springframework.boot.web.servlet.FilterRegistrationBean<org.springframework.web.filter.CorsFilter> bean =
+                new org.springframework.boot.web.servlet.FilterRegistrationBean<>(corsFilter);
+        bean.setOrder(org.springframework.core.Ordered.HIGHEST_PRECEDENCE);
+        return bean;
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
+        configuration.setAllowedOriginPatterns(List.of(
                 "http://localhost:3000",
+                "http://*.localhost:3000",
                 "http://localhost:3001",
-                "https://yp-frontend.vercel.app"
+                "http://*.localhost:3001",
+                "https://yp-frontend.vercel.app",
+                "https://*.yp-frontend.vercel.app"
         ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));

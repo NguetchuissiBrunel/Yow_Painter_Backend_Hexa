@@ -16,7 +16,9 @@ public record KernelProperties(
         String bootstrapClientId,
         String bootstrapApiKey,
         String signupPlatformOrganizationCode,
-        boolean autoProvisionArtists
+        boolean autoProvisionArtists,
+        String systemUserEmail,
+        String systemUserPassword
 ) {
     public String effectiveBootstrapClientId() {
         return bootstrapClientId == null || bootstrapClientId.isBlank() ? clientId() : bootstrapClientId;

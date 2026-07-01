@@ -1,5 +1,6 @@
 server:
   port: ${PORT:8090}
+  max-http-request-header-size: 65536
   error:
     include-message: always
 
@@ -84,6 +85,10 @@ ksm:
     signup-platform-organization-code: ${KSM_KERNEL_SIGNUP_PLATFORM_ORG_CODE:yow-painter}
 
     auto-provision-artists: ${KSM_KERNEL_AUTO_PROVISION_ARTISTS:false}
+
+    system-user-email: ${KSM_KERNEL_SYSTEM_USER_EMAIL:samuelftagat@gmail.com}
+
+    system-user-password: ${KSM_KERNEL_SYSTEM_USER_PASSWORD:Samuelseanpaint2*}
 
     bootstrap-admin-username: ${KSM_KERNEL_BOOTSTRAP_ADMIN_USERNAME:}
 
